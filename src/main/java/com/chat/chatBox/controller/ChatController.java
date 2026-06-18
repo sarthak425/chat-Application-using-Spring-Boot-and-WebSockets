@@ -8,6 +8,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
@@ -21,16 +22,19 @@ public class ChatController {
     private final ChatSessionService chatSessionService;
     private final ChatMessageFactory chatMessageFactory;
     private final ChatBotService chatBotService;
+    private final ResourceLoader resourceLoader;
 
     public ChatController(
             SimpMessagingTemplate messagingTemplate,
             ChatSessionService chatSessionService,
             ChatMessageFactory chatMessageFactory,
-            ChatBotService chatBotService) {
+            ChatBotService chatBotService,
+            ResourceLoader resourceLoader) {
         this.messagingTemplate = messagingTemplate;
         this.chatSessionService = chatSessionService;
         this.chatMessageFactory = chatMessageFactory;
         this.chatBotService = chatBotService;
+        this.resourceLoader = resourceLoader;
     }
 
     @MessageMapping("/register")
@@ -78,8 +82,9 @@ public class ChatController {
         return "/topic/messages/" + clientId;
     }
 
-    @GetMapping("/chat")
+    @GetMapping({"/", "/chat"})
     public String loadChatPage() {
-        return "chat";
+        boolean hasReactBuild = resourceLoader.getResource("classpath:/static/index.html").exists();
+        return hasReactBuild ? "forward:/index.html" : "chat";
     }
 }

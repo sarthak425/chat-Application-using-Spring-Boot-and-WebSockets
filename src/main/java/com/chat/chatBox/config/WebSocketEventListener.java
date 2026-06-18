@@ -35,6 +35,6 @@ public class WebSocketEventListener {
         chatSessionService.removeUser(sessionId)
                 .ifPresent(sender -> messagingTemplate.convertAndSend(
                         "/topic/messages",
-                        chatMessageFactory.systemMessage(sender + " left the chat")));
+                        chatMessageFactory.systemMessage(sessionId, sender + " left the chat")));
     }
 }

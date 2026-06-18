@@ -36,27 +36,46 @@ public class ChatController {
     @MessageMapping("/register")
     public void register(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
+        String clientId = resolveClientId(chatMessage, sessionId);
         String sender = chatMessage.getSender() == null ? "Anonymous" : chatMessage.getSender().trim();
 
         if (sessionId != null) {
             chatSessionService.registerUser(sessionId, sender);
         }
 
-        messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.systemMessage(sender + " joined the chat"));
+        messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.systemMessage(clientId, "Welcome, " + sender + ". This chat is private to your session."));
     }
 
     @MessageMapping("/sendMessage")
-    public void handleMessage(@Payload ChatMessage chatMessage) {
+    public void handleMessage(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
+        String sessionId = headerAccessor.getSessionId();
+        String clientId = resolveClientId(chatMessage, sessionId);
         String sender = chatMessage.getSender() == null ? "Anonymous" : chatMessage.getSender().trim();
         String content = chatMessage.getContent() == null ? "" : chatMessage.getContent().trim();
 
-        messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.userMessage(sender, content));
-        messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.botTypingMessage());
+        messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.userMessage(clientId, sender, content));
+        messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.botTypingMessage(clientId));
 
         CompletableFuture.runAsync(() -> {
             String reply = chatBotService.generateReply(content);
-            messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.botMessage(reply));
+            messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.botMessage(clientId, reply));
         }, CompletableFuture.delayedExecutor(900, TimeUnit.MILLISECONDS));
+    }
+
+    private String resolveClientId(ChatMessage chatMessage, String sessionId) {
+        if (chatMessage != null && chatMessage.getClientId() != null && !chatMessage.getClientId().trim().isBlank()) {
+            return chatMessage.getClientId().trim();
+        }
+
+        if (sessionId != null && !sessionId.isBlank()) {
+            return sessionId;
+        }
+
+        return "anonymous";
+    }
+
+    private String privateDestination(String clientId) {
+        return "/topic/messages/" + clientId;
     }
 
     @GetMapping("/chat")

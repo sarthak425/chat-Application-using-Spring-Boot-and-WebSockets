@@ -1,9 +1,6 @@
 services:
   - type: web
     name: chatbox
-    runtime: java
-    buildCommand: chmod +x mvnw && ./mvnw clean package -DskipTests
-    startCommand: java -jar target/chatBox-0.0.1-SNAPSHOT.jar
-    envVars:
-      - key: JAVA_VERSION
-        value: 21
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile

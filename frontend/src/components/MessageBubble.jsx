@@ -1,26 +1,35 @@
 import { motion } from 'framer-motion';
-import { FiCopy, FiCheck } from 'react-icons/fi';
+import { FiCheck, FiCopy } from 'react-icons/fi';
+import { MdDone, MdDoneAll } from 'react-icons/md';
 
-export default function MessageBubble({
-  message,
-  isOwn = false,
-  onCopy,
-  copied = false
-}) {
-  if (message.type === 'SYSTEM') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 8, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 8 }}
-        className="flex justify-center"
-      >
-        <div className="max-w-[80%] rounded-full border border-white/5 bg-white/5 px-4 py-2 text-center text-xs text-slate-400">
-          {message.content}
-        </div>
-      </motion.div>
-    );
+function StatusIcon({ status }) {
+  if (status === 'READ') {
+    return <MdDoneAll className="text-sky-400" />;
   }
+
+  if (status === 'DELIVERED') {
+    return <MdDoneAll className="text-slate-300" />;
+  }
+
+  return <MdDone className="text-slate-300" />;
+}
+
+export default function MessageBubble({ message, isOwn = false, onCopy, copied = false }) {
+  const time = message.timestamp
+    ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  const mediaBlock = message.fileUrl ? (
+    message.messageType === 'IMAGE' ? (
+      <img src={message.fileUrl} alt="Attachment" className="mb-3 max-h-80 rounded-2xl object-cover" />
+    ) : message.messageType === 'AUDIO' ? (
+      <audio className="mb-3 w-full" controls src={message.fileUrl} />
+    ) : (
+      <a href={message.fileUrl} target="_blank" rel="noreferrer" className="mb-3 block rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-wa-accent">
+        Attachment
+      </a>
+    )
+  ) : null;
 
   return (
     <motion.div
@@ -29,20 +38,10 @@ export default function MessageBubble({
       exit={{ opacity: 0, y: 12, scale: 0.98 }}
       className={`group flex max-w-[84%] gap-3 ${isOwn ? 'ml-auto flex-row-reverse' : ''}`}
     >
-      {!isOwn ? (
-        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-white/20 to-white/8 text-sm font-semibold text-white shadow-soft ring-1 ring-white/5">
-          {(message.sender || 'U').slice(0, 2).toUpperCase()}
-        </div>
-      ) : (
-        <div className="h-10 w-10 shrink-0" />
-      )}
-
       <div
         className={[
           'relative rounded-3xl px-4 py-3 shadow-soft transition',
-          isOwn
-            ? 'bg-wa-accent text-white rounded-br-md'
-            : 'bg-[#202c33] text-white rounded-bl-md'
+          isOwn ? 'rounded-br-md bg-wa-accent text-white' : 'rounded-bl-md bg-[#202c33] text-white'
         ].join(' ')}
       >
         <button
@@ -54,12 +53,17 @@ export default function MessageBubble({
           {copied ? <FiCheck /> : <FiCopy />}
         </button>
 
-        <p className="whitespace-pre-wrap break-words pr-8 text-[15px] leading-relaxed">
-          {message.content}
-        </p>
+        {mediaBlock}
+
+        {message.content ? (
+          <p className="whitespace-pre-wrap break-words pr-8 text-[15px] leading-relaxed">
+            {message.deleted ? 'This message was deleted' : message.content}
+          </p>
+        ) : null}
 
         <div className={`mt-2 flex items-center justify-end gap-1 text-[11px] ${isOwn ? 'text-white/80' : 'text-slate-400'}`}>
-          <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          <span>{time}</span>
+          {isOwn ? <StatusIcon status={message.status} /> : null}
         </div>
       </div>
     </motion.div>

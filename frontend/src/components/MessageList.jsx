@@ -1,45 +1,46 @@
 import { AnimatePresence } from 'framer-motion';
 import { FiArrowDownCircle } from 'react-icons/fi';
-import MessageBubble from './MessageBubble';
-import TypingIndicator from './TypingIndicator';
 import EmptyState from './EmptyState';
 import LoadingSkeleton from './LoadingSkeleton';
-import FloatingButtons from './FloatingButtons';
+import MessageBubble from './MessageBubble';
+import TypingIndicator from './TypingIndicator';
 
 export default function MessageList({
-  conversation,
+  messages,
   isTyping,
-  currentUserName = '',
+  typingLabel,
   onCopyMessage,
   copiedMessageId,
   isAtBottom,
   onScrollToLatest,
   onStartNewChat,
   onScroll,
-  scrollRef
+  scrollRef,
+  isLoading = false
 }) {
-  const messages = conversation?.messages || [];
-  const lastMessage = messages[messages.length - 1];
-  const showSkeleton = Boolean(lastMessage && lastMessage.pending && lastMessage.type === 'BOT');
-
   return (
     <div ref={scrollRef} onScroll={onScroll} className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(37,211,102,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.03),transparent_24%)]" />
 
       <div className="relative z-10 flex min-h-full flex-1 flex-col justify-end gap-4">
-        {messages.length ? (
+        {isLoading ? (
+          <div className="space-y-4">
+            <LoadingSkeleton />
+            <LoadingSkeleton />
+            <LoadingSkeleton />
+          </div>
+        ) : messages.length ? (
           <AnimatePresence initial={false}>
             {messages.map((message) => (
               <MessageBubble
                 key={message.id}
                 message={message}
-                isOwn={Boolean(currentUserName.trim() && message.sender === currentUserName.trim())}
+                isOwn={message.mine}
                 onCopy={onCopyMessage}
                 copied={copiedMessageId === message.id}
               />
             ))}
-
-            {showSkeleton ? <LoadingSkeleton key="skeleton" /> : isTyping ? <TypingIndicator key="typing" /> : null}
+            {isTyping ? <TypingIndicator key="typing" label={typingLabel} /> : null}
           </AnimatePresence>
         ) : (
           <EmptyState onStartNewChat={onStartNewChat} />
@@ -56,12 +57,6 @@ export default function MessageList({
           <FiArrowDownCircle />
         </button>
       ) : null}
-
-      <FloatingButtons
-        onScrollToLatest={onScrollToLatest}
-        onStartNewChat={onStartNewChat}
-        isAtBottom={isAtBottom}
-      />
     </div>
   );
 }

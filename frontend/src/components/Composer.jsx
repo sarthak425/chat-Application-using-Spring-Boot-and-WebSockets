@@ -1,36 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
-import { FiPaperclip, FiSmile, FiMic, FiSend, FiTrash2, FiImage, FiX } from 'react-icons/fi';
+import { FiPaperclip, FiSend, FiSmile, FiMic, FiX } from 'react-icons/fi';
 
-const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🔥', '💬', '🎉', '🤖', '✅'];
+const EMOJIS = ['😀', '😂', '😍', '👍', '🙏', '🔥', '🎉', '😎', '❤️', '🥹'];
 
 export default function Composer({
   value,
   onChange,
   onSend,
-  onAttachmentSelect,
   attachment,
-  onClearConversation,
-  onVoiceInput
+  onAttachmentSelect,
+  onRemoveAttachment,
+  onVoiceMessage
 }) {
-  const textareaRef = useRef(null);
-  const fileInputRef = useRef(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const fileInputRef = useRef(null);
+
+  const [previewUrl, setPreviewUrl] = useState('');
 
   useEffect(() => {
-    const handler = (event) => {
-      if (!event.target.closest?.('[data-emoji-picker]')) {
-        setEmojiOpen(false);
-      }
-    };
+    if (!attachment) {
+      setPreviewUrl('');
+      return undefined;
+    }
 
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, []);
+    const url = URL.createObjectURL(attachment);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [attachment]);
 
   function insertEmoji(emoji) {
     onChange(`${value}${emoji}`);
     setEmojiOpen(false);
-    textareaRef.current?.focus();
   }
 
   function handleKeyDown(event) {
@@ -40,23 +43,64 @@ export default function Composer({
     }
   }
 
+  function openAttachmentPicker() {
+    fileInputRef.current?.click();
+  }
+
+  function handleFileChange(event) {
+    const file = event.target.files?.[0];
+    if (file) {
+      onAttachmentSelect(file);
+    }
+    event.target.value = '';
+  }
+
+  async function toggleRecording() {
+    if (recording) {
+      mediaRecorderRef.current?.stop();
+      setRecording(false);
+      return;
+    }
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    chunksRef.current = [];
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        chunksRef.current.push(event.data);
+      }
+    };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      onVoiceMessage?.(blob);
+      stream.getTracks().forEach((track) => track.stop());
+    };
+    mediaRecorderRef.current = mediaRecorder;
+    mediaRecorder.start();
+    setRecording(true);
+  }
+
   return (
     <div className="sticky bottom-0 z-20 border-t border-white/5 bg-wa-panel/95 px-4 py-3 backdrop-blur-xl sm:px-6">
       {attachment ? (
-        <div className="mb-3 flex items-center justify-between rounded-2xl border border-wa-accent/20 bg-wa-accent/10 px-4 py-3 text-sm text-white">
+        <div className="mb-3 flex items-center justify-between rounded-2xl border border-white/10 bg-[#111b21] p-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-wa-accent/20 text-wa-accent">
-              <FiImage />
-            </span>
-            <div>
-              <p className="font-medium">{attachment.name}</p>
-              <p className="text-xs text-slate-400">{Math.round(attachment.size / 1024)} KB</p>
+            {attachment.type?.startsWith('image/') ? (
+              <img src={previewUrl} alt={attachment.name} className="h-14 w-14 rounded-2xl object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-wa-accent/15 text-sm text-wa-accent">
+                FILE
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-white">{attachment.name}</p>
+              <p className="text-xs text-slate-400">{attachment.type || 'Attachment'}</p>
             </div>
           </div>
 
           <button
-            onClick={() => onAttachmentSelect(null)}
             type="button"
+            onClick={onRemoveAttachment}
             className="rounded-full p-2 text-slate-400 transition hover:bg-white/5 hover:text-white"
             aria-label="Remove attachment"
           >
@@ -65,12 +109,12 @@ export default function Composer({
         </div>
       ) : null}
 
-      <div className="flex items-end gap-3">
-        <div className="relative flex items-end gap-2" data-emoji-picker>
+      <div className="flex items-end gap-2">
+        <div className="relative flex items-center gap-2">
           <button
-            onClick={() => setEmojiOpen((current) => !current)}
             type="button"
-            className="rounded-2xl bg-white/5 p-3 text-slate-300 transition hover:bg-white/10 hover:text-white"
+            onClick={() => setEmojiOpen((current) => !current)}
+            className="rounded-full bg-white/5 p-3 text-white/80 transition hover:bg-white/10"
             aria-label="Emoji picker"
           >
             <FiSmile />
@@ -81,9 +125,9 @@ export default function Composer({
               {EMOJIS.map((emoji) => (
                 <button
                   key={emoji}
-                  onClick={() => insertEmoji(emoji)}
                   type="button"
-                  className="rounded-2xl bg-white/5 p-2 text-xl transition hover:bg-white/10"
+                  onClick={() => insertEmoji(emoji)}
+                  className="rounded-2xl p-2 text-lg transition hover:bg-white/10"
                 >
                   {emoji}
                 </button>
@@ -92,64 +136,47 @@ export default function Composer({
           ) : null}
 
           <button
-            onClick={() => fileInputRef.current?.click()}
             type="button"
-            className="rounded-2xl bg-white/5 p-3 text-slate-300 transition hover:bg-white/10 hover:text-white"
+            onClick={openAttachmentPicker}
+            className="rounded-full bg-white/5 p-3 text-white/80 transition hover:bg-white/10"
             aria-label="Attach file"
           >
             <FiPaperclip />
           </button>
 
           <button
-            onClick={onVoiceInput}
             type="button"
-            className="rounded-2xl bg-white/5 p-3 text-slate-300 transition hover:bg-white/10 hover:text-white"
-            aria-label="Voice input"
+            onClick={toggleRecording}
+            className={[
+              'rounded-full p-3 transition',
+              recording ? 'bg-red-500 text-white' : 'bg-white/5 text-white/80 hover:bg-white/10'
+            ].join(' ')}
+            aria-label="Voice message"
           >
             <FiMic />
           </button>
+
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
         </div>
 
-        <div className="flex-1 rounded-[28px] border border-white/5 bg-[#202c33] px-4 py-3 shadow-inner">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            className="max-h-36 w-full resize-none bg-transparent text-[15px] text-white outline-none placeholder:text-slate-500"
-            placeholder="Type a message"
-          />
-        </div>
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={1}
+          placeholder="Type a message"
+          className="max-h-40 flex-1 resize-none rounded-[28px] border border-white/10 bg-[#111b21] px-5 py-4 text-white outline-none placeholder:text-slate-500 focus:border-wa-accent"
+        />
 
         <button
-          onClick={onSend}
           type="button"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-wa-accent text-2xl text-wa-surface shadow-soft transition hover:scale-105 hover:bg-wa-accentDark"
+          onClick={onSend}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-wa-accent text-wa-surface shadow-soft transition hover:bg-wa-accentDark"
           aria-label="Send message"
         >
           <FiSend />
         </button>
-
-        <button
-          onClick={onClearConversation}
-          type="button"
-          className="rounded-2xl bg-white/5 p-3 text-slate-300 transition hover:bg-white/10 hover:text-white"
-          aria-label="Clear current conversation"
-        >
-          <FiTrash2 />
-        </button>
       </div>
-
-      <input
-        ref={fileInputRef}
-        onChange={(event) => {
-          onAttachmentSelect(event.target.files?.[0] || null);
-          event.target.value = '';
-        }}
-        className="hidden"
-        type="file"
-      />
     </div>
   );
 }

@@ -13,7 +13,7 @@ export default function EmptyState({ onStartNewChat }) {
       </div>
       <h2 className="mt-6 font-display text-3xl font-semibold text-white">Start a conversation</h2>
       <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-        Your chat stays private in this browser. Create a new conversation on the left and start messaging other people.
+        Pick someone from your contacts or use the New Chat button to begin a secure one-to-one chat.
       </p>
       <button
         onClick={onStartNewChat}

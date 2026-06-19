@@ -11,12 +11,12 @@ public class ChatMessageFactory {
         return build(clientId, sender, content, "CHAT");
     }
 
-    public ChatMessage botMessage(String clientId, String content) {
-        return build(clientId, "ChatBot", content, "BOT");
+    public ChatMessage peerMessage(String clientId, String content) {
+        return build(clientId, "Peer", content, "CHAT");
     }
 
-    public ChatMessage botTypingMessage(String clientId) {
-        return build(clientId, "ChatBot", "is typing...", "BOT_TYPING");
+    public ChatMessage typingMessage(String clientId) {
+        return build(clientId, "Peer", "is typing...", "TYPING");
     }
 
     public ChatMessage systemMessage(String clientId, String content) {

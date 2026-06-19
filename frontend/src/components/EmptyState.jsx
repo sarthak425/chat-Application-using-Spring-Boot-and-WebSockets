@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { FaRobot } from 'react-icons/fa6';
+import { FiMessageCircle } from 'react-icons/fi';
 
 export default function EmptyState({ onStartNewChat }) {
   return (
@@ -9,11 +9,11 @@ export default function EmptyState({ onStartNewChat }) {
       className="flex h-full flex-col items-center justify-center px-6 text-center"
     >
       <div className="flex h-20 w-20 items-center justify-center rounded-full bg-wa-accent/10 text-3xl text-wa-accent shadow-soft">
-        <FaRobot />
+        <FiMessageCircle />
       </div>
       <h2 className="mt-6 font-display text-3xl font-semibold text-white">Start a conversation</h2>
       <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-        Your chat stays private in this browser. Create a new conversation on the left and start talking to AI Assistant.
+        Your chat stays private in this browser. Create a new conversation on the left and start messaging other people.
       </p>
       <button
         onClick={onStartNewChat}

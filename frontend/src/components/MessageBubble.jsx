@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion';
-import { FaRobot } from 'react-icons/fa6';
 import { FiCopy, FiCheck } from 'react-icons/fi';
 
 export default function MessageBubble({
@@ -31,8 +30,8 @@ export default function MessageBubble({
       className={`group flex max-w-[84%] gap-3 ${isOwn ? 'ml-auto flex-row-reverse' : ''}`}
     >
       {!isOwn ? (
-        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-wa-accent to-wa-accentDark text-white shadow-soft">
-          <FaRobot />
+        <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-white/20 to-white/8 text-sm font-semibold text-white shadow-soft ring-1 ring-white/5">
+          {(message.sender || 'U').slice(0, 2).toUpperCase()}
         </div>
       ) : (
         <div className="h-10 w-10 shrink-0" />

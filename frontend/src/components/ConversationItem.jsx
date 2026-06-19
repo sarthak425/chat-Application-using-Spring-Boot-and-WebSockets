@@ -29,7 +29,7 @@ export default function ConversationItem({
           .slice(0, 2)
           .map((part) => part[0])
           .join('')
-          .toUpperCase() || 'AI'}
+          .toUpperCase() || 'CH'}
       </div>
 
       <div className="min-w-0 flex-1">

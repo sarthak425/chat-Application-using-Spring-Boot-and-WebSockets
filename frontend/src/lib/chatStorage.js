@@ -44,7 +44,7 @@ export function createConversation({
 export function createMessage({
   id = makeId(),
   clientId,
-  sender = 'ChatBot',
+  sender = 'Anonymous',
   content = '',
   type = 'CHAT',
   timestamp = Date.now(),
@@ -212,7 +212,7 @@ export function appendMessage(conversations, conversationId, message) {
       ...conversation,
       messages: nextMessages,
       updatedAt: message.timestamp || Date.now(),
-      typing: message.type === 'BOT_TYPING' ? true : message.type === 'BOT' ? false : conversation.typing,
+      typing: conversation.typing,
       title:
         conversation.title === 'New chat' && message.type === 'CHAT'
           ? summarizeTitle(message.content)

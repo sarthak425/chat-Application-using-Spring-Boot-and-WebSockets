@@ -23,7 +23,7 @@ export default function Sidebar({
       <div className="border-b border-white/5 p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.32em] text-wa-accent">ChatBox AI</p>
+            <p className="text-[11px] uppercase tracking-[0.32em] text-wa-accent">ChatBox</p>
             <h2 className="mt-1 font-display text-2xl font-semibold text-white">Conversations</h2>
           </div>
 

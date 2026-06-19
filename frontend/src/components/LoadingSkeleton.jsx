@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { FaRobot } from 'react-icons/fa6';
+import { FiMessageCircle } from 'react-icons/fi';
 
 export default function LoadingSkeleton() {
   return (
@@ -10,7 +10,7 @@ export default function LoadingSkeleton() {
       className="group flex max-w-[84%] gap-3"
     >
       <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-wa-accent to-wa-accentDark text-white shadow-soft">
-        <FaRobot />
+        <FiMessageCircle />
       </div>
 
       <div className="relative rounded-3xl px-4 py-3 shadow-soft">

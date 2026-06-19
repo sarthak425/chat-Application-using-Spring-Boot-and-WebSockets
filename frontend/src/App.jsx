@@ -10,12 +10,11 @@ import {
   getConversationPreview,
   loadInitialState,
   persistState,
-  setConversationTyping,
   summarizeTitle
 } from './lib/chatStorage';
 import { createChatClient, registerConversation, sendChatMessage, subscribeToConversation } from './lib/chatSocket';
 
-const BOT_NAME = 'AI Assistant';
+const CHAT_NAME = 'ChatBox';
 
 export default function App() {
   const initialState = useMemo(() => loadInitialState(), []);
@@ -76,27 +75,11 @@ export default function App() {
   function handleSocketMessage(incomingMessage) {
     const conversationId = incomingMessage.clientId || SHARED_CONVERSATION_ID;
 
-    if (incomingMessage.type === 'BOT_TYPING') {
-      setTypingMap((currentTypingMap) => ({
-        ...currentTypingMap,
-        [conversationId]: true
-      }));
-      setConversations((currentConversations) =>
-        setConversationTyping(currentConversations, conversationId, true)
-      );
-      return;
-    }
-
     const normalizedMessage = createMessage({
       ...incomingMessage,
       clientId: conversationId,
       pending: false
     });
-
-    setTypingMap((currentTypingMap) => ({
-      ...currentTypingMap,
-      [conversationId]: normalizedMessage.type === 'BOT' ? false : currentTypingMap[conversationId] || false
-    }));
 
     setConversations((currentConversations) =>
       appendMessage(currentConversations, conversationId, normalizedMessage)
@@ -243,10 +226,6 @@ export default function App() {
 
     setComposerValue('');
     setAttachment(null);
-    setTypingMap((currentTypingMap) => ({
-      ...currentTypingMap,
-      [activeConversation.id]: true
-    }));
 
     sendChatMessage(socketRef.current, {
       clientId: activeConversation.id,
@@ -325,19 +304,20 @@ export default function App() {
         />
 
         <main className="flex min-w-0 flex-col bg-wa-surface">
-          <ChatHeader botName={BOT_NAME} online={connectionStatus === 'online'} />
+          <ChatHeader chatName={CHAT_NAME} online={connectionStatus === 'online'} />
 
           <MessageList
             conversation={activeConversation}
             isTyping={Boolean(activeConversation && typingMap[activeConversation.id])}
-          onCopyMessage={handleCopyMessage}
-          copiedMessageId={copiedMessageId}
-          isAtBottom={isAtBottom}
-          onScrollToLatest={scrollToLatest}
-          onStartNewChat={createNewConversation}
-          onScroll={handleScroll}
-          scrollRef={scrollRef}
-        />
+            currentUserName={profileName}
+            onCopyMessage={handleCopyMessage}
+            copiedMessageId={copiedMessageId}
+            isAtBottom={isAtBottom}
+            onScrollToLatest={scrollToLatest}
+            onStartNewChat={createNewConversation}
+            onScroll={handleScroll}
+            scrollRef={scrollRef}
+          />
 
           <Composer
             value={composerValue}

@@ -410,8 +410,8 @@
     <div class="chat-header">
       <div>
         <h1 class="brand-title">ChatBox</h1>
-        <p class="brand-subtitle">Private one-to-one chat with ChatBot, styled like WhatsApp.</p>
-        <div class="privacy-badge">Only you and ChatBot can see this conversation</div>
+        <p class="brand-subtitle">Private one-to-one chat styled like WhatsApp.</p>
+        <div class="privacy-badge">Only you and the other person can see this conversation</div>
       </div>
       <div id="statusPill" class="status-pill">
         <span id="statusDot" class="status-dot"></span>
@@ -421,7 +421,7 @@
 
     <div id="chat" class="messages" aria-live="polite"></div>
     <div id="typingIndicator" class="typing-indicator d-none">
-      <span id="typingLabel">ChatBot is typing</span>
+      <span id="typingLabel">Someone is typing</span>
       <span class="typing-dots" aria-hidden="true">
         <span></span>
         <span></span>
@@ -456,7 +456,7 @@
       <ul>
         <li>Private messages tied to your browser session.</li>
         <li>WhatsApp-like chat bubbles and dark green styling.</li>
-        <li>Real-time bot replies with a typing indicator.</li>
+        <li>Real-time user messages with a typing indicator.</li>
         <li>Saved username and chat history just for you.</li>
         <li>Enter-to-send and quick prompt shortcuts.</li>
       </ul>
@@ -531,7 +531,7 @@
   }
 
   function showTypingIndicator(label) {
-    typingLabel.textContent = label || "ChatBot is typing";
+    typingLabel.textContent = label || "Someone is typing";
     typingIndicator.classList.remove("d-none");
     chatElement.scrollTop = chatElement.scrollHeight;
   }
@@ -541,8 +541,8 @@
   }
 
   function renderMessage(message, persist = true) {
-    if (message.type === "BOT_TYPING") {
-      showTypingIndicator(`${message.sender || "ChatBot"} is typing`);
+    if (message.type === "TYPING") {
+      showTypingIndicator(`${message.sender || "Someone"} is typing`);
       return;
     }
 
@@ -570,7 +570,7 @@
     } else if (isBotMessage) {
       bubble.innerHTML = `
         <div class="meta">
-          <span class="sender">${escapeHtml(message.sender || "ChatBot")}</span>
+          <span class="sender">${escapeHtml(message.sender || "Anonymous")}</span>
           <span>${timeText}</span>
         </div>
         <div class="content">${escapeHtml(message.content || "")}</div>
@@ -596,7 +596,7 @@
     chatElement.appendChild(bubble);
     chatElement.scrollTop = chatElement.scrollHeight;
 
-    if (persist && message.type !== "BOT_TYPING") {
+    if (persist && message.type !== "TYPING") {
       saveHistory(message);
     }
   }

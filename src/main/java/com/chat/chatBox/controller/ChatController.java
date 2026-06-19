@@ -1,7 +1,6 @@
 package com.chat.chatBox.controller;
 
 import com.chat.chatBox.model.ChatMessage;
-import com.chat.chatBox.service.ChatBotService;
 import com.chat.chatBox.service.ChatMessageFactory;
 import com.chat.chatBox.service.ChatSessionService;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -12,28 +11,22 @@ import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-
 @Controller
 public class ChatController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatSessionService chatSessionService;
     private final ChatMessageFactory chatMessageFactory;
-    private final ChatBotService chatBotService;
     private final ResourceLoader resourceLoader;
 
     public ChatController(
             SimpMessagingTemplate messagingTemplate,
             ChatSessionService chatSessionService,
             ChatMessageFactory chatMessageFactory,
-            ChatBotService chatBotService,
             ResourceLoader resourceLoader) {
         this.messagingTemplate = messagingTemplate;
         this.chatSessionService = chatSessionService;
         this.chatMessageFactory = chatMessageFactory;
-        this.chatBotService = chatBotService;
         this.resourceLoader = resourceLoader;
     }
 
@@ -55,12 +48,6 @@ public class ChatController {
         String content = chatMessage.getContent() == null ? "" : chatMessage.getContent().trim();
 
         messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.userMessage(clientId, sender, content));
-        messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.botTypingMessage(clientId));
-
-        CompletableFuture.runAsync(() -> {
-            String reply = chatBotService.generateReply(content);
-            messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.botMessage(clientId, reply));
-        }, CompletableFuture.delayedExecutor(900, TimeUnit.MILLISECONDS));
     }
 
     private String resolveClientId(ChatMessage chatMessage, String sessionId) {

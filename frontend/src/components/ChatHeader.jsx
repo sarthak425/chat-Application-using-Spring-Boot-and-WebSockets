@@ -1,17 +1,16 @@
-import { FaRobot } from 'react-icons/fa6';
-import { FiMoreVertical, FiPhone, FiVideo } from 'react-icons/fi';
+import { FiMessageCircle, FiMoreVertical, FiPhone, FiVideo } from 'react-icons/fi';
 
-export default function ChatHeader({ botName = 'AI Assistant', online = true }) {
+export default function ChatHeader({ chatName = 'ChatBox', online = true }) {
   return (
     <header className="sticky top-0 z-20 border-b border-white/5 bg-wa-surface/90 px-4 py-3 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-wa-accent to-wa-accentDark text-lg text-white shadow-soft">
-            <FaRobot />
+            <FiMessageCircle />
           </div>
 
           <div className="min-w-0">
-            <h1 className="truncate font-display text-lg font-semibold text-white">{botName}</h1>
+            <h1 className="truncate font-display text-lg font-semibold text-white">{chatName}</h1>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${online ? 'bg-wa-accent' : 'bg-slate-500'}`}>
                 {online ? <span className="absolute inset-0 rounded-full bg-wa-accent/50 animate-ping" /> : null}

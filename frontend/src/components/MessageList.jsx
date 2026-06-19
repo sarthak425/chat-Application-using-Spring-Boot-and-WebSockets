@@ -9,6 +9,7 @@ import FloatingButtons from './FloatingButtons';
 export default function MessageList({
   conversation,
   isTyping,
+  currentUserName = '',
   onCopyMessage,
   copiedMessageId,
   isAtBottom,
@@ -32,7 +33,7 @@ export default function MessageList({
               <MessageBubble
                 key={message.id}
                 message={message}
-                isOwn={message.type === 'CHAT' && message.sender !== 'ChatBot'}
+                isOwn={Boolean(currentUserName.trim() && message.sender === currentUserName.trim())}
                 onCopy={onCopyMessage}
                 copied={copiedMessageId === message.id}
               />

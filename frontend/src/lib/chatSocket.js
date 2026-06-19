@@ -2,8 +2,11 @@ import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
 
 export function createChatClient({ onConnect, onDisconnect, onError }) {
+  const backendBase = import.meta.env.VITE_BACKEND_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8080' : '');
+  const endpoint = backendBase ? `${backendBase.replace(/\/$/, '')}/chat` : '/chat';
+
   const client = new Client({
-    webSocketFactory: () => new SockJS('/chat'),
+    webSocketFactory: () => new SockJS(endpoint),
     reconnectDelay: 4000,
     heartbeatIncoming: 4000,
     heartbeatOutgoing: 4000,

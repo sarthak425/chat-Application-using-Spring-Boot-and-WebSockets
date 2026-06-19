@@ -14,7 +14,7 @@ export default function ChatHeader({ botName = 'AI Assistant', online = true }) 
             <h1 className="truncate font-display text-lg font-semibold text-white">{botName}</h1>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${online ? 'bg-wa-accent' : 'bg-slate-500'}`}>
-                <span className="absolute inset-0 rounded-full bg-wa-accent/50 animate-ping" />
+                {online ? <span className="absolute inset-0 rounded-full bg-wa-accent/50 animate-ping" /> : null}
               </span>
               <span>{online ? 'Online' : 'Offline'}</span>
             </div>

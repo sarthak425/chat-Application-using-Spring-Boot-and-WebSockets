@@ -3,6 +3,8 @@ import { FiArrowDownCircle } from 'react-icons/fi';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import EmptyState from './EmptyState';
+import LoadingSkeleton from './LoadingSkeleton';
+import FloatingButtons from './FloatingButtons';
 
 export default function MessageList({
   conversation,
@@ -16,6 +18,8 @@ export default function MessageList({
   scrollRef
 }) {
   const messages = conversation?.messages || [];
+  const lastMessage = messages[messages.length - 1];
+  const showSkeleton = Boolean(lastMessage && lastMessage.pending && lastMessage.type === 'BOT');
 
   return (
     <div ref={scrollRef} onScroll={onScroll} className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6">
@@ -34,7 +38,7 @@ export default function MessageList({
               />
             ))}
 
-            {isTyping ? <TypingIndicator key="typing" /> : null}
+            {showSkeleton ? <LoadingSkeleton key="skeleton" /> : isTyping ? <TypingIndicator key="typing" /> : null}
           </AnimatePresence>
         ) : (
           <EmptyState onStartNewChat={onStartNewChat} />
@@ -51,6 +55,12 @@ export default function MessageList({
           <FiArrowDownCircle />
         </button>
       ) : null}
+
+      <FloatingButtons
+        onScrollToLatest={onScrollToLatest}
+        onStartNewChat={onStartNewChat}
+        isAtBottom={isAtBottom}
+      />
     </div>
   );
 }

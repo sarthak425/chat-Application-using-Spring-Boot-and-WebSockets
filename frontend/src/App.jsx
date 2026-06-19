@@ -133,6 +133,14 @@ export default function App() {
     conversations.forEach((conversation) => ensureSubscription(socketRef.current, conversation.id));
   }, [conversations, ensureSubscription]);
 
+  const activeConversation = useMemo(() => {
+    return (
+      conversations.find((conversation) => conversation.id === activeConversationId) ||
+      conversations[0] ||
+      null
+    );
+  }, [activeConversationId, conversations]);
+
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) {
@@ -141,14 +149,6 @@ export default function App() {
 
     element.scrollTop = element.scrollHeight;
   }, [activeConversationId, activeConversation?.messages.length, activeConversation && typingMap[activeConversation.id]]);
-
-  const activeConversation = useMemo(() => {
-    return (
-      conversations.find((conversation) => conversation.id === activeConversationId) ||
-      conversations[0] ||
-      null
-    );
-  }, [activeConversationId, conversations]);
 
   const filteredConversations = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();

@@ -42,7 +42,7 @@ export default function MessageBubble({
         className={[
           'relative rounded-3xl px-4 py-3 shadow-soft transition',
           isOwn
-            ? 'bg-wa-accent text-[#06210f] rounded-br-md'
+            ? 'bg-wa-accent text-white rounded-br-md'
             : 'bg-[#202c33] text-white rounded-bl-md'
         ].join(' ')}
       >
@@ -59,7 +59,7 @@ export default function MessageBubble({
           {message.content}
         </p>
 
-        <div className={`mt-2 flex items-center justify-end gap-1 text-[11px] ${isOwn ? 'text-[#0c2915]/70' : 'text-slate-400'}`}>
+        <div className={`mt-2 flex items-center justify-end gap-1 text-[11px] ${isOwn ? 'text-white/80' : 'text-slate-400'}`}>
           <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
       </div>

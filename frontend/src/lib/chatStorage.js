@@ -5,6 +5,8 @@ const STORAGE_KEYS = {
   legacyClientId: 'chatBox.clientId.v1'
 };
 
+export const SHARED_CONVERSATION_ID = 'shared-room';
+
 function makeId() {
   if (window.crypto?.randomUUID) {
     return window.crypto.randomUUID();
@@ -104,15 +106,30 @@ function normalizeConversation(conversation) {
 export function loadInitialState() {
   const storedConversations = safeParse(localStorage.getItem(STORAGE_KEYS.conversations), null);
   const profileName = localStorage.getItem(STORAGE_KEYS.profileName) || 'Sam';
-  const activeConversationId = localStorage.getItem(STORAGE_KEYS.activeConversationId);
 
   if (Array.isArray(storedConversations) && storedConversations.length > 0) {
     const conversations = storedConversations.map(normalizeConversation);
-    const preferredActiveId = activeConversationId || conversations[0].id;
+    const sharedConversationIndex = conversations.findIndex((conversation) => conversation.id === SHARED_CONVERSATION_ID);
+
+    if (sharedConversationIndex >= 0) {
+      const sharedConversation = conversations[sharedConversationIndex];
+      return {
+        conversations: [sharedConversation, ...conversations.filter((_, index) => index !== sharedConversationIndex)],
+        activeConversationId: SHARED_CONVERSATION_ID,
+        profileName
+      };
+    }
+
+    const [firstConversation, ...restConversations] = conversations;
+    const sharedConversation = {
+      ...firstConversation,
+      id: SHARED_CONVERSATION_ID,
+      title: firstConversation.title === 'New chat' ? 'Shared chat' : firstConversation.title
+    };
 
     return {
-      conversations,
-      activeConversationId: preferredActiveId,
+      conversations: [sharedConversation, ...restConversations],
+      activeConversationId: SHARED_CONVERSATION_ID,
       profileName
     };
   }
@@ -128,20 +145,26 @@ export function loadInitialState() {
     return {
       conversations: [
         createConversation({
-          id: legacyClientId,
-          title: messages.length ? summarizeTitle(messages[0].content) : 'New chat',
+          id: SHARED_CONVERSATION_ID,
+          title: messages.length ? summarizeTitle(messages[0].content) : 'Shared chat',
           messages
         })
       ],
-      activeConversationId: legacyClientId,
+      activeConversationId: SHARED_CONVERSATION_ID,
       profileName: legacySender
     };
   }
 
   const firstConversation = createConversation();
   return {
-    conversations: [firstConversation],
-    activeConversationId: firstConversation.id,
+    conversations: [
+      {
+        ...firstConversation,
+        id: SHARED_CONVERSATION_ID,
+        title: 'Shared chat'
+      }
+    ],
+    activeConversationId: SHARED_CONVERSATION_ID,
     profileName
   };
 }

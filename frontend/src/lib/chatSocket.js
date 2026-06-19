@@ -1,5 +1,6 @@
 import SockJS from 'sockjs-client';
 import { Client } from '@stomp/stompjs';
+import { SHARED_CONVERSATION_ID } from './chatStorage';
 
 export function createChatClient({ onConnect, onDisconnect, onError }) {
   const backendBase = import.meta.env.VITE_BACKEND_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:8080' : '');
@@ -25,7 +26,7 @@ export function subscribeToConversation(client, conversationId, onMessage) {
     return null;
   }
 
-  return client.subscribe(`/topic/messages/${conversationId}`, (frame) => {
+  return client.subscribe('/topic/messages', (frame) => {
     onMessage(JSON.parse(frame.body));
   });
 }
@@ -33,13 +34,19 @@ export function subscribeToConversation(client, conversationId, onMessage) {
 export function sendChatMessage(client, payload) {
   client?.publish({
     destination: '/app/sendMessage',
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      ...payload,
+      clientId: payload?.clientId || SHARED_CONVERSATION_ID
+    })
   });
 }
 
 export function registerConversation(client, payload) {
   client?.publish({
     destination: '/app/register',
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      ...payload,
+      clientId: payload?.clientId || SHARED_CONVERSATION_ID
+    })
   });
 }

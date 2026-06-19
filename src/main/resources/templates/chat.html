@@ -483,10 +483,11 @@
   let stompClient = null;
   let hasJoined = false;
   let currentSender = "";
-  const clientId = getOrCreateClientId();
+  const sharedConversationId = "shared-room";
+  const clientId = sharedConversationId;
   const historyKey = `chatBox.history.${clientId}`;
   const nameKey = `chatBox.sender.${clientId}`;
-  const subscriptionDestination = `/topic/messages/${clientId}`;
+  const subscriptionDestination = "/topic/messages";
   const maxHistoryItems = 60;
 
   const chatElement = document.getElementById("chat");
@@ -500,20 +501,6 @@
   const clearChatButton = document.getElementById("clearChatBtn");
   const focusMessageButton = document.getElementById("focusMessageBtn");
   const promptButtons = document.querySelectorAll(".prompt-btn");
-
-  function getOrCreateClientId() {
-    const storageKey = "chatBox.clientId.v1";
-    let storedClientId = localStorage.getItem(storageKey);
-
-    if (!storedClientId) {
-      storedClientId = (window.crypto && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : `client-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem(storageKey, storedClientId);
-    }
-
-    return storedClientId;
-  }
 
   function setConnectionStatus(connected, label) {
     statusPill.classList.toggle("connected", connected);
@@ -638,7 +625,7 @@
       hasJoined = true;
       localStorage.setItem(nameKey, sender);
       stompClient.send("/app/register", {}, JSON.stringify({
-        clientId,
+        clientId: sharedConversationId,
         sender,
         content: "",
         type: "SYSTEM"
@@ -688,7 +675,7 @@
     registerUserIfNeeded();
 
     stompClient.send("/app/sendMessage", {}, JSON.stringify({
-      clientId,
+      clientId: sharedConversationId,
       sender,
       content,
       type: "CHAT"

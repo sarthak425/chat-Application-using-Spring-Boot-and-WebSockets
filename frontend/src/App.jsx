@@ -4,10 +4,9 @@ import Composer from './components/Composer';
 import MessageList from './components/MessageList';
 import Sidebar from './components/Sidebar';
 import {
-  addConversation,
   appendMessage,
-  createConversation,
   createMessage,
+  SHARED_CONVERSATION_ID,
   getConversationPreview,
   loadInitialState,
   persistState,
@@ -55,27 +54,27 @@ export default function App() {
     persistState({ conversations, activeConversationId, profileName });
   }, [conversations, activeConversationId, profileName]);
 
-  const ensureSubscription = useCallback((client, conversationId) => {
-    if (!client?.connected || subscriptionsRef.current.has(conversationId)) {
+  const ensureSubscription = useCallback((client) => {
+    if (!client?.connected || subscriptionsRef.current.has(SHARED_CONVERSATION_ID)) {
       return;
     }
 
-    const subscription = subscribeToConversation(client, conversationId, handleSocketMessage);
-    subscriptionsRef.current.set(conversationId, subscription);
+    const subscription = subscribeToConversation(client, SHARED_CONVERSATION_ID, handleSocketMessage);
+    subscriptionsRef.current.set(SHARED_CONVERSATION_ID, subscription);
 
-    if (!registeredConversationsRef.current.has(conversationId)) {
+    if (!registeredConversationsRef.current.has(SHARED_CONVERSATION_ID)) {
       registerConversation(client, {
-        clientId: conversationId,
+        clientId: SHARED_CONVERSATION_ID,
         sender: profileNameRef.current,
         content: '',
         type: 'SYSTEM'
       });
-      registeredConversationsRef.current.add(conversationId);
+      registeredConversationsRef.current.add(SHARED_CONVERSATION_ID);
     }
   }, []);
 
   function handleSocketMessage(incomingMessage) {
-    const conversationId = incomingMessage.clientId || activeConversationIdRef.current;
+    const conversationId = incomingMessage.clientId || SHARED_CONVERSATION_ID;
 
     if (incomingMessage.type === 'BOT_TYPING') {
       setTypingMap((currentTypingMap) => ({
@@ -108,7 +107,7 @@ export default function App() {
     const client = createChatClient({
       onConnect: (stompClient) => {
         setConnectionStatus('online');
-        conversationsRef.current.forEach((conversation) => ensureSubscription(stompClient, conversation.id));
+        ensureSubscription(stompClient);
       },
       onDisconnect: () => {
         setConnectionStatus('offline');
@@ -130,7 +129,7 @@ export default function App() {
       return;
     }
 
-    conversations.forEach((conversation) => ensureSubscription(socketRef.current, conversation.id));
+    ensureSubscription(socketRef.current);
   }, [conversations, ensureSubscription]);
 
   const activeConversation = useMemo(() => {
@@ -165,19 +164,21 @@ export default function App() {
   }, [conversations, searchQuery]);
 
   function createNewConversation() {
-    const conversation = createConversation({
-      title: 'New chat'
-    });
-
-    setConversations((currentConversations) => addConversation(currentConversations, conversation));
-    setActiveConversationId(conversation.id);
+    setConversations((currentConversations) =>
+      currentConversations.map((conversation) =>
+        conversation.id === SHARED_CONVERSATION_ID
+          ? { ...conversation, messages: [], typing: false, updatedAt: Date.now(), title: 'Shared chat' }
+          : conversation
+      )
+    );
+    setActiveConversationId(SHARED_CONVERSATION_ID);
     setTypingMap((currentTypingMap) => ({
       ...currentTypingMap,
-      [conversation.id]: false
+      [SHARED_CONVERSATION_ID]: false
     }));
 
     if (socketRef.current?.connected) {
-      ensureSubscription(socketRef.current, conversation.id);
+      ensureSubscription(socketRef.current);
     }
   }
 

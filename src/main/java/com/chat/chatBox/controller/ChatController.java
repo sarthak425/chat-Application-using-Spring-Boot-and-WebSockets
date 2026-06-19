@@ -40,14 +40,11 @@ public class ChatController {
     @MessageMapping("/register")
     public void register(@Payload ChatMessage chatMessage, SimpMessageHeaderAccessor headerAccessor) {
         String sessionId = headerAccessor.getSessionId();
-        String clientId = resolveClientId(chatMessage, sessionId);
         String sender = chatMessage.getSender() == null ? "Anonymous" : chatMessage.getSender().trim();
 
         if (sessionId != null) {
             chatSessionService.registerUser(sessionId, sender);
         }
-
-        messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.systemMessage(clientId, "Welcome, " + sender + ". This chat is private to your session."));
     }
 
     @MessageMapping("/sendMessage")
@@ -57,12 +54,12 @@ public class ChatController {
         String sender = chatMessage.getSender() == null ? "Anonymous" : chatMessage.getSender().trim();
         String content = chatMessage.getContent() == null ? "" : chatMessage.getContent().trim();
 
-        messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.userMessage(clientId, sender, content));
-        messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.botTypingMessage(clientId));
+        messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.userMessage(clientId, sender, content));
+        messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.botTypingMessage(clientId));
 
         CompletableFuture.runAsync(() -> {
             String reply = chatBotService.generateReply(content);
-            messagingTemplate.convertAndSend(privateDestination(clientId), chatMessageFactory.botMessage(clientId, reply));
+            messagingTemplate.convertAndSend("/topic/messages", chatMessageFactory.botMessage(clientId, reply));
         }, CompletableFuture.delayedExecutor(900, TimeUnit.MILLISECONDS));
     }
 
@@ -76,10 +73,6 @@ public class ChatController {
         }
 
         return "anonymous";
-    }
-
-    private String privateDestination(String clientId) {
-        return "/topic/messages/" + clientId;
     }
 
     @GetMapping({"/", "/chat"})

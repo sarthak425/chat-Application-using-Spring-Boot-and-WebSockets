@@ -12,6 +12,7 @@ import {
   createSocketClient,
   sendCallAccept,
   sendCallEnd,
+  sendCallMediaState,
   sendCallReject,
   sendCallSignal,
   sendCallStart,
@@ -103,6 +104,37 @@ function stopMediaStream(stream) {
   stream?.getTracks().forEach((track) => track.stop());
 }
 
+function streamHasLiveVideo(stream) {
+  return Boolean(stream?.getVideoTracks().some((track) => track.readyState === 'live'));
+}
+
+function formatCallDuration(totalSeconds) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
+  }
+
+  return [minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
+}
+
+function describeDisplaySurface(track) {
+  const surface = track?.getSettings?.().displaySurface;
+  switch (surface) {
+    case 'browser':
+      return 'Browser tab';
+    case 'window':
+      return 'Application window';
+    case 'monitor':
+      return 'Entire screen';
+    default:
+      return 'Screen';
+  }
+}
+
 function createCallId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -157,7 +189,9 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef(null);
   const callStateRef = useRef(null);
   const peerConnectionRef = useRef(null);
-  const localStreamRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const screenStreamRef = useRef(null);
+  const videoSenderRef = useRef(null);
   const remoteStreamRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
 
@@ -346,10 +380,6 @@ export default function ChatPage() {
   }, [callState]);
 
   useEffect(() => {
-    localStreamRef.current = localStream;
-  }, [localStream]);
-
-  useEffect(() => {
     remoteStreamRef.current = remoteStream;
   }, [remoteStream]);
 
@@ -365,6 +395,93 @@ export default function ChatPage() {
     return navigator.mediaDevices.getUserMedia(constraints);
   }, []);
 
+  const buildLocalPreviewStream = useCallback(() => {
+    const current = callStateRef.current;
+    const cameraStream = cameraStreamRef.current;
+    const screenStream = screenStreamRef.current;
+
+    if (!current || (!cameraStream && !screenStream)) {
+      return null;
+    }
+
+    const tracks = [];
+    const audioTrack = cameraStream?.getAudioTracks().find((track) => track.readyState === 'live');
+    if (audioTrack) {
+      tracks.push(audioTrack);
+    }
+
+    const activeVideoTrack = current.localScreenSharing
+      ? screenStream?.getVideoTracks().find((track) => track.readyState === 'live')
+      : current.cameraEnabled
+        ? cameraStream?.getVideoTracks().find((track) => track.readyState === 'live')
+        : null;
+
+    if (activeVideoTrack) {
+      tracks.push(activeVideoTrack);
+    }
+
+    return tracks.length ? new MediaStream(tracks) : null;
+  }, []);
+
+  const syncLocalPreviewStream = useCallback(() => {
+    setLocalStream(buildLocalPreviewStream());
+  }, [buildLocalPreviewStream]);
+
+  const replaceVideoSenderTrack = useCallback(async (track) => {
+    const sender = videoSenderRef.current;
+    if (!sender) return;
+
+    try {
+      await sender.replaceTrack(track || null);
+    } catch {
+      // Ignore sender replacement errors during cleanup or renegotiation.
+    }
+  }, []);
+
+  const stopScreenSharing = useCallback(
+    async ({ notifyPeer = true, reason = 'STOPPED' } = {}) => {
+      const current = callStateRef.current;
+      if (!current?.localScreenSharing) return;
+
+      const screenStream = screenStreamRef.current;
+      screenStreamRef.current = null;
+      screenStream?.getVideoTracks()?.forEach((track) => {
+        track.onended = null;
+      });
+      stopMediaStream(screenStream);
+
+      const fallbackTrack = current.cameraEnabled
+        ? cameraStreamRef.current?.getVideoTracks().find((track) => track.readyState === 'live') || null
+        : null;
+
+      await replaceVideoSenderTrack(fallbackTrack);
+
+      const nextState = {
+        ...current,
+        screenSharing: false,
+        localScreenSharing: false,
+        mediaLabel: null
+      };
+
+      callStateRef.current = nextState;
+      setCallState(nextState);
+      syncLocalPreviewStream();
+
+      if (notifyPeer && socketRef.current?.connected) {
+        sendCallMediaState(socketRef.current, {
+          callId: current.callId,
+          screenSharing: false,
+          mediaLabel: null
+        });
+      }
+
+      if (reason === 'DISPLAY_ENDED' && current.phase === 'active') {
+        pushToast('Screen sharing stopped');
+      }
+    },
+    [pushToast, replaceVideoSenderTrack, syncLocalPreviewStream]
+  );
+
   const closePeerConnection = useCallback(() => {
     const pc = peerConnectionRef.current;
     if (!pc) return;
@@ -378,6 +495,7 @@ export default function ChatPage() {
       // Ignore close errors from partially-initialized peers.
     } finally {
       peerConnectionRef.current = null;
+      videoSenderRef.current = null;
     }
   }, []);
 
@@ -393,8 +511,11 @@ export default function ChatPage() {
 
     callStateRef.current = null;
     closePeerConnection();
-    stopMediaStream(localStreamRef.current);
-    localStreamRef.current = null;
+    stopMediaStream(cameraStreamRef.current);
+    stopMediaStream(screenStreamRef.current);
+    cameraStreamRef.current = null;
+    screenStreamRef.current = null;
+    videoSenderRef.current = null;
     remoteStreamRef.current = null;
     pendingIceCandidatesRef.current = [];
     setLocalStream(null);
@@ -429,6 +550,7 @@ export default function ChatPage() {
 
     const pc = new RTCPeerConnection(rtcConfiguration);
     peerConnectionRef.current = pc;
+    videoSenderRef.current = pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
 
     pc.onicecandidate = (event) => {
       if (!event.candidate) return;
@@ -502,15 +624,21 @@ export default function ChatPage() {
           peerName: event.callerName || 'Incoming call',
           peerImage: event.callerImage || '',
           muted: false,
-          videoEnabled: event.callType === 'VIDEO'
+          cameraEnabled: event.callType === 'VIDEO',
+          screenSharing: false,
+          localScreenSharing: false,
+          mediaLabel: null,
+          startedAt: null
         };
 
         callStateRef.current = session;
         setCallState(session);
         setLocalStream(null);
         setRemoteStream(null);
-        stopMediaStream(localStreamRef.current);
-        localStreamRef.current = null;
+        stopMediaStream(cameraStreamRef.current);
+        stopMediaStream(screenStreamRef.current);
+        cameraStreamRef.current = null;
+        screenStreamRef.current = null;
         remoteStreamRef.current = null;
 
         const pc = createPeerConnection(session);
@@ -531,7 +659,15 @@ export default function ChatPage() {
         try {
           await pc.setRemoteDescription({ type: 'answer', sdp: event.sdp });
           await flushPendingIceCandidates();
-          setCallState((current) => (current ? { ...current, phase: 'active' } : current));
+          const startedAt = callStateRef.current?.startedAt || Date.now();
+          const nextState = {
+            ...callStateRef.current,
+            phase: 'active',
+            startedAt
+          };
+          callStateRef.current = nextState;
+          setCallState(nextState);
+          syncLocalPreviewStream();
         } catch {
           pushToast('Call answer could not be applied');
           cleanupCall();
@@ -557,6 +693,19 @@ export default function ChatPage() {
         } else {
           pendingIceCandidatesRef.current.push(candidate);
         }
+        return;
+      }
+
+      case 'MEDIA_STATE': {
+        if (currentCall?.callId !== event.callId) return;
+        const nextState = {
+          ...currentCall,
+          screenSharing: Boolean(event.screenSharing),
+          mediaLabel: event.mediaLabel || null
+        };
+        callStateRef.current = nextState;
+        setCallState(nextState);
+        syncLocalPreviewStream();
         return;
       }
 
@@ -593,7 +742,7 @@ export default function ChatPage() {
       default:
         return;
     }
-  }, [cleanupCall, createPeerConnection, flushPendingIceCandidates, pushToast, user?.username]);
+  }, [cleanupCall, createPeerConnection, flushPendingIceCandidates, pushToast, syncLocalPreviewStream, user?.username]);
 
   // ── Fetch conversation detail & messages on select ─────────────────────────
 
@@ -868,7 +1017,11 @@ export default function ChatPage() {
       peerName: activePeer.username,
       peerImage: activePeer.profileImage || '',
       muted: false,
-      videoEnabled: callType === 'VIDEO'
+      cameraEnabled: callType === 'VIDEO',
+      screenSharing: false,
+      localScreenSharing: false,
+      mediaLabel: null,
+      startedAt: null
     };
 
     callStateRef.current = session;
@@ -878,11 +1031,17 @@ export default function ChatPage() {
 
     try {
       const stream = await getCallMediaStream(callType);
-      localStreamRef.current = stream;
-      setLocalStream(stream);
+      cameraStreamRef.current = stream;
+      syncLocalPreviewStream();
 
       const pc = createPeerConnection(session);
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        pc.addTrack(audioTrack, stream);
+      }
+
+      const videoTrack = stream.getVideoTracks()[0] || null;
+      await replaceVideoSenderTrack(videoTrack);
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -908,11 +1067,17 @@ export default function ChatPage() {
       setCallState((state) => (state ? { ...state, phase: 'connecting' } : state));
 
       const stream = await getCallMediaStream(current.callType);
-      localStreamRef.current = stream;
-      setLocalStream(stream);
+      cameraStreamRef.current = stream;
+      syncLocalPreviewStream();
 
       const pc = peerConnectionRef.current || createPeerConnection(current);
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        pc.addTrack(audioTrack, stream);
+      }
+
+      const videoTrack = stream.getVideoTracks()[0] || null;
+      await replaceVideoSenderTrack(videoTrack);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -922,7 +1087,11 @@ export default function ChatPage() {
         sdp: answer.sdp || ''
       });
 
-      setCallState((state) => (state ? { ...state, phase: 'active' } : state));
+      const startedAt = Date.now();
+      const nextState = { ...current, phase: 'active', startedAt };
+      callStateRef.current = nextState;
+      setCallState(nextState);
+      syncLocalPreviewStream();
     } catch (error) {
       if (callStateRef.current?.direction === 'incoming') {
         sendCallReject(socketRef.current, { callId: current.callId, reason: 'MEDIA_DENIED' });
@@ -956,7 +1125,7 @@ export default function ChatPage() {
 
   function handleToggleMute() {
     const current = callStateRef.current;
-    const stream = localStreamRef.current;
+    const stream = cameraStreamRef.current;
     if (!current || !stream) return;
 
     const nextMuted = !current.muted;
@@ -969,15 +1138,93 @@ export default function ChatPage() {
 
   function handleToggleVideo() {
     const current = callStateRef.current;
-    const stream = localStreamRef.current;
+    const stream = cameraStreamRef.current;
     if (!current || !stream || current.callType !== 'VIDEO') return;
 
-    const nextVideoEnabled = !current.videoEnabled;
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = nextVideoEnabled;
-    });
+    const videoTrack = stream.getVideoTracks()[0];
+    if (!videoTrack) return;
 
-    setCallState((state) => (state ? { ...state, videoEnabled: nextVideoEnabled } : state));
+    const nextCameraEnabled = !current.cameraEnabled;
+    videoTrack.enabled = nextCameraEnabled;
+
+    if (!current.localScreenSharing) {
+      replaceVideoSenderTrack(nextCameraEnabled ? videoTrack : null);
+    }
+
+    const nextState = { ...current, cameraEnabled: nextCameraEnabled };
+    callStateRef.current = nextState;
+    setCallState(nextState);
+    syncLocalPreviewStream();
+  }
+
+  async function handleToggleScreenShare() {
+    const current = callStateRef.current;
+    if (!current || current.phase !== 'active') return;
+
+    if (current.screenSharing && !current.localScreenSharing) {
+      pushToast('The other user is already sharing their screen');
+      return;
+    }
+
+    if (current.localScreenSharing) {
+      await stopScreenSharing({ notifyPeer: true });
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      pushToast('This browser does not support screen sharing');
+      return;
+    }
+
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          frameRate: { ideal: 15, max: 30 }
+        },
+        audio: false
+      });
+
+      const screenTrack = displayStream.getVideoTracks()[0];
+      if (!screenTrack) {
+        stopMediaStream(displayStream);
+        throw new Error('Screen share stream is unavailable');
+      }
+
+      screenStreamRef.current = displayStream;
+      const mediaLabel = describeDisplaySurface(screenTrack);
+      screenTrack.onended = () => {
+        if (callStateRef.current?.screenSharing) {
+          stopScreenSharing({ notifyPeer: true, reason: 'DISPLAY_ENDED' });
+        }
+      };
+
+      await replaceVideoSenderTrack(screenTrack);
+
+      const nextState = {
+        ...current,
+        screenSharing: true,
+        localScreenSharing: true,
+        mediaLabel
+      };
+      callStateRef.current = nextState;
+      setCallState(nextState);
+      syncLocalPreviewStream();
+
+      if (socketRef.current?.connected) {
+        sendCallMediaState(socketRef.current, {
+          callId: current.callId,
+          screenSharing: true,
+          mediaLabel
+        });
+      }
+    } catch (error) {
+      screenStreamRef.current?.getVideoTracks()?.forEach((track) => {
+        track.onended = null;
+      });
+      stopMediaStream(screenStreamRef.current);
+      screenStreamRef.current = null;
+      pushToast(error?.message || 'Unable to start screen sharing');
+    }
   }
 
   async function handleDeleteMessage(messageId) {
@@ -1116,6 +1363,7 @@ export default function ChatPage() {
             onEnd={handleEndCall}
             onToggleMute={handleToggleMute}
             onToggleVideo={handleToggleVideo}
+            onToggleScreenShare={handleToggleScreenShare}
           />
         </main>
       </div>

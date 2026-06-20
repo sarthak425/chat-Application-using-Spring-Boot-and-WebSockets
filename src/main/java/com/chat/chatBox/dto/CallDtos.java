@@ -18,6 +18,7 @@ public final class CallDtos {
         INVITE,
         ACCEPT,
         ICE,
+        MEDIA_STATE,
         REJECT,
         END,
         BUSY
@@ -42,6 +43,12 @@ public final class CallDtos {
             Integer sdpMLineIndex) {
     }
 
+    public record MediaStateRequest(
+            @NotBlank String callId,
+            @NotNull Boolean screenSharing,
+            String mediaLabel) {
+    }
+
     public record EndCallRequest(
             @NotBlank String callId,
             String reason) {
@@ -63,6 +70,8 @@ public final class CallDtos {
             String sdpMid,
             Integer sdpMLineIndex,
             String reason,
+            Boolean screenSharing,
+            String mediaLabel,
             Instant timestamp) {
     }
 }

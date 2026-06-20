@@ -129,6 +129,13 @@ export function sendCallSignal(client, payload) {
   });
 }
 
+export function sendCallMediaState(client, payload) {
+  client?.publish({
+    destination: '/app/chat.call.media-state',
+    body: JSON.stringify(payload)
+  });
+}
+
 export function sendCallReject(client, payload) {
   client?.publish({
     destination: '/app/chat.call.reject',

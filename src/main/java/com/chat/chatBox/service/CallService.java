@@ -59,13 +59,13 @@ public class CallService {
                 Instant.now());
 
         if (isBusy(caller.getId(), request.callId())) {
-            sendEvent(caller.getId(), toEvent(session, CallDtos.CallEventType.BUSY, null, null, null, null, "USER_BUSY"));
+            sendEvent(caller.getId(), toEvent(session, CallDtos.CallEventType.BUSY, null, null, null, null, "USER_BUSY", null, null));
             return;
         }
 
         if (!callee.isOnlineStatus() || isBusy(callee.getId(), request.callId())) {
             sendEvent(caller.getId(), toEvent(session, CallDtos.CallEventType.BUSY, null, null, null, null,
-                    callee.isOnlineStatus() ? "USER_BUSY" : "USER_UNAVAILABLE"));
+                    callee.isOnlineStatus() ? "USER_BUSY" : "USER_UNAVAILABLE", null, null));
             return;
         }
 
@@ -77,7 +77,7 @@ public class CallService {
         activeCallByUserId.put(callee.getId(), session.callId());
 
         try {
-            sendEvent(callee.getId(), toEvent(session, CallDtos.CallEventType.INVITE, request.sdp(), null, null, null, null));
+            sendEvent(callee.getId(), toEvent(session, CallDtos.CallEventType.INVITE, request.sdp(), null, null, null, null, null, null));
         } catch (RuntimeException ex) {
             cleanupSession(session.callId());
             throw ex;
@@ -89,7 +89,7 @@ public class CallService {
         CallSession session = requireSession(request.callId());
         ensureCallee(session, callee);
         try {
-            sendEvent(session.callerId(), toEvent(session, CallDtos.CallEventType.ACCEPT, request.sdp(), null, null, null, null));
+            sendEvent(session.callerId(), toEvent(session, CallDtos.CallEventType.ACCEPT, request.sdp(), null, null, null, null, null, null));
         } catch (RuntimeException ex) {
             cleanupSession(session.callId());
             throw ex;
@@ -101,7 +101,15 @@ public class CallService {
         CallSession session = requireSession(request.callId());
         Long recipientId = recipientFor(session, sender.getId());
         sendEvent(recipientId, toEvent(session, CallDtos.CallEventType.ICE, null,
-                request.candidate(), request.sdpMid(), request.sdpMLineIndex(), null));
+                request.candidate(), request.sdpMid(), request.sdpMLineIndex(), null, null, null));
+    }
+
+    public void updateMediaState(CallDtos.MediaStateRequest request) {
+        AppUser sender = currentUserService.requireCurrentUser();
+        CallSession session = requireSession(request.callId());
+        Long recipientId = recipientFor(session, sender.getId());
+        sendEvent(recipientId, toEvent(session, CallDtos.CallEventType.MEDIA_STATE, null,
+                null, null, null, null, request.screenSharing(), request.mediaLabel()));
     }
 
     public void rejectCall(CallDtos.EndCallRequest request) {
@@ -113,7 +121,7 @@ public class CallService {
                 : CallDtos.CallEventType.END;
         try {
             sendEvent(recipientId, toEvent(session, eventType, null, null, null, null,
-                    defaultReason(request.reason(), eventType)));
+                    defaultReason(request.reason(), eventType), null, null));
         } finally {
             cleanupSession(session.callId());
         }
@@ -125,7 +133,7 @@ public class CallService {
         Long recipientId = recipientFor(session, sender.getId());
         try {
             sendEvent(recipientId, toEvent(session, CallDtos.CallEventType.END, null, null, null, null,
-                    defaultReason(request.reason(), CallDtos.CallEventType.END)));
+                    defaultReason(request.reason(), CallDtos.CallEventType.END), null, null));
         } finally {
             cleanupSession(session.callId());
         }
@@ -199,7 +207,9 @@ public class CallService {
             String candidate,
             String sdpMid,
             Integer sdpMLineIndex,
-            String reason) {
+            String reason,
+            Boolean screenSharing,
+            String mediaLabel) {
         return new CallDtos.CallEvent(
                 session.callId(),
                 session.conversationId(),
@@ -216,6 +226,8 @@ public class CallService {
                 sdpMid,
                 sdpMLineIndex,
                 reason,
+                screenSharing,
+                mediaLabel,
                 Instant.now());
     }
 

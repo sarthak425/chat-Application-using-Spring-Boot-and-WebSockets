@@ -33,6 +33,11 @@ public class CallSocketController {
         callService.relaySignal(request);
     }
 
+    @MessageMapping("/chat.call.media-state")
+    public void mediaState(@Valid @Payload CallDtos.MediaStateRequest request) {
+        callService.updateMediaState(request);
+    }
+
     @MessageMapping("/chat.call.reject")
     public void reject(@Valid @Payload CallDtos.EndCallRequest request) {
         callService.rejectCall(request);

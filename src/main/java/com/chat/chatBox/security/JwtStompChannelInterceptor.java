@@ -3,9 +3,10 @@ package com.chat.chatBox.security;
 import java.util.Objects;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.ExecutorChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -15,7 +16,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 
 @Component
-public class JwtStompChannelInterceptor implements ChannelInterceptor {
+public class JwtStompChannelInterceptor implements ExecutorChannelInterceptor {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
@@ -65,6 +66,20 @@ public class JwtStompChannelInterceptor implements ChannelInterceptor {
     @Override
     public void afterSendCompletion(Message<?> message, MessageChannel channel, boolean sent, Exception ex) {
         // Clear security context after processing to prevent thread-local leakage
+        SecurityContextHolder.clearContext();
+    }
+
+    @Override
+    public Message<?> beforeHandle(Message<?> message, MessageChannel channel, MessageHandler handler) {
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (accessor != null && accessor.getUser() instanceof Authentication authentication) {
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+        return message;
+    }
+
+    @Override
+    public void afterMessageHandled(Message<?> message, MessageChannel channel, MessageHandler handler, Exception ex) {
         SecurityContextHolder.clearContext();
     }
 }

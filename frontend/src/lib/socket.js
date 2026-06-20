@@ -60,6 +60,12 @@ export function subscribeToInbox(client, userId, onInbox) {
   });
 }
 
+export function subscribeToUserCalls(client, userId, onCall) {
+  return client.subscribe(`/topic/users/${userId}/calls`, (frame) => {
+    onCall(JSON.parse(frame.body));
+  });
+}
+
 /** @deprecated Use subscribeToUserPresence for per-user presence instead. */
 export function subscribeToPresence(client, onPresence) {
   return client.subscribe('/topic/presence', (frame) => {
@@ -98,6 +104,41 @@ export function sendReaction(client, payload) {
 export function sendPin(client, payload) {
   client?.publish({
     destination: '/app/chat.pin',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendCallStart(client, payload) {
+  client?.publish({
+    destination: '/app/chat.call.start',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendCallAccept(client, payload) {
+  client?.publish({
+    destination: '/app/chat.call.accept',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendCallSignal(client, payload) {
+  client?.publish({
+    destination: '/app/chat.call.signal',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendCallReject(client, payload) {
+  client?.publish({
+    destination: '/app/chat.call.reject',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendCallEnd(client, payload) {
+  client?.publish({
+    destination: '/app/chat.call.end',
     body: JSON.stringify(payload)
   });
 }

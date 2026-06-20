@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import ChatHeader from '../components/ChatHeader';
+import CallOverlay from '../components/CallOverlay';
 import Composer from '../components/Composer';
 import MessageList from '../components/MessageList';
 import NewChatModal from '../components/NewChatModal';
@@ -9,12 +10,18 @@ import { useToast } from '../context/ToastContext';
 import { http } from '../lib/http';
 import {
   createSocketClient,
+  sendCallAccept,
+  sendCallEnd,
+  sendCallReject,
+  sendCallSignal,
+  sendCallStart,
   sendSocketMessage,
   sendTyping,
   sendReaction,
   subscribeToConversation,
   subscribeToInbox,
   subscribeToPresence,
+  subscribeToUserCalls,
   subscribeToTyping,
   subscribeToUserMessages,
 } from '../lib/socket';
@@ -92,6 +99,24 @@ function requestNotificationPermission() {
   }
 }
 
+function stopMediaStream(stream) {
+  stream?.getTracks().forEach((track) => track.stop());
+}
+
+function createCallId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+const rtcConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' }
+  ]
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
@@ -116,16 +141,25 @@ export default function ChatPage() {
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [replyingTo, setReplyingTo] = useState(null); // MessageResponse | null
+  const [callState, setCallState] = useState(null);
+  const [localStream, setLocalStream] = useState(null);
+  const [remoteStream, setRemoteStream] = useState(null);
 
   const socketRef = useRef(null);
   const userMessagesSubRef = useRef(null);
   const inboxSubRef = useRef(null);
   const presenceSubRef = useRef(null);
+  const callSubRef = useRef(null);
   const conversationSubRef = useRef(null);
   const typingSubRef = useRef(null);
   const scrollRef = useRef(null);
   const activeConversationIdRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const callStateRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
 
   const deferredSearchQuery = useDeferredValue(searchQuery.trim().toLowerCase());
 
@@ -199,6 +233,7 @@ export default function ChatPage() {
         userMessagesSubRef.current?.unsubscribe();
         inboxSubRef.current?.unsubscribe();
         presenceSubRef.current?.unsubscribe();
+        callSubRef.current?.unsubscribe();
 
         // ✅ THE FIX: subscribe to personal message feed — receives messages for ALL conversations
         userMessagesSubRef.current = subscribeToUserMessages(client, user.id, (msg) => {
@@ -255,6 +290,10 @@ export default function ChatPage() {
           );
         });
 
+        callSubRef.current = subscribeToUserCalls(client, user.id, (event) => {
+          handleCallEvent(event);
+        });
+
         // Resubscribe to active conversation if any
         if (activeConversationIdRef.current) {
           subscribeActiveConversation(client, activeConversationIdRef.current);
@@ -269,7 +308,7 @@ export default function ChatPage() {
 
     socketRef.current = client;
     return () => client.deactivate();
-  }, [pushToast, token, user, subscribeActiveConversation]);
+  }, [handleCallEvent, pushToast, token, user, subscribeActiveConversation]);
 
   useEffect(() => {
     const cleanup = connectSocket();
@@ -301,6 +340,260 @@ export default function ChatPage() {
   useEffect(() => {
     activeConversationIdRef.current = activeConversationId;
   }, [activeConversationId]);
+  // call state sync
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  useEffect(() => {
+    localStreamRef.current = localStream;
+  }, [localStream]);
+
+  useEffect(() => {
+    remoteStreamRef.current = remoteStream;
+  }, [remoteStream]);
+
+  const getCallMediaStream = useCallback(async (callType) => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('This browser does not support calling');
+    }
+
+    const constraints = callType === 'VIDEO'
+      ? { audio: true, video: { facingMode: 'user' } }
+      : { audio: true, video: false };
+
+    return navigator.mediaDevices.getUserMedia(constraints);
+  }, []);
+
+  const closePeerConnection = useCallback(() => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+
+    try {
+      pc.ontrack = null;
+      pc.onicecandidate = null;
+      pc.onconnectionstatechange = null;
+      pc.close();
+    } catch {
+      // Ignore close errors from partially-initialized peers.
+    } finally {
+      peerConnectionRef.current = null;
+    }
+  }, []);
+
+  const cleanupCall = useCallback(({ sendRemoteEnd = false, reason = 'ENDED' } = {}) => {
+    const current = callStateRef.current;
+    if (sendRemoteEnd && current) {
+      if (current.direction === 'incoming' && current.phase === 'ringing') {
+        sendCallReject(socketRef.current, { callId: current.callId, reason });
+      } else {
+        sendCallEnd(socketRef.current, { callId: current.callId, reason });
+      }
+    }
+
+    callStateRef.current = null;
+    closePeerConnection();
+    stopMediaStream(localStreamRef.current);
+    localStreamRef.current = null;
+    remoteStreamRef.current = null;
+    pendingIceCandidatesRef.current = [];
+    setLocalStream(null);
+    setRemoteStream(null);
+    setCallState(null);
+  }, [closePeerConnection]);
+
+  useEffect(() => () => {
+    callSubRef.current?.unsubscribe();
+    cleanupCall();
+  }, [cleanupCall]);
+
+  const flushPendingIceCandidates = useCallback(async () => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+
+    const pending = [...pendingIceCandidatesRef.current];
+    pendingIceCandidatesRef.current = [];
+
+    for (const candidate of pending) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        // Ignore stale ICE updates.
+      }
+    }
+  }, []);
+
+  const createPeerConnection = useCallback((session) => {
+    closePeerConnection();
+    pendingIceCandidatesRef.current = [];
+
+    const pc = new RTCPeerConnection(rtcConfiguration);
+    peerConnectionRef.current = pc;
+
+    pc.onicecandidate = (event) => {
+      if (!event.candidate) return;
+      sendCallSignal(socketRef.current, {
+        callId: session.callId,
+        candidate: event.candidate.candidate,
+        sdpMid: event.candidate.sdpMid,
+        sdpMLineIndex: event.candidate.sdpMLineIndex
+      });
+    };
+
+    pc.ontrack = (event) => {
+      const [stream] = event.streams;
+      if (stream) {
+        remoteStreamRef.current = stream;
+        setRemoteStream(stream);
+        return;
+      }
+
+      const fallbackStream = remoteStreamRef.current || new MediaStream();
+      fallbackStream.addTrack(event.track);
+      remoteStreamRef.current = fallbackStream;
+      setRemoteStream(new MediaStream(fallbackStream.getTracks()));
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (!['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        return;
+      }
+
+      const current = callStateRef.current;
+      if (current?.callId !== session.callId) {
+        return;
+      }
+
+      const endedReason = pc.connectionState === 'failed' ? 'Call connection failed' : 'Call ended';
+      cleanupCall();
+      pushToast(endedReason);
+    };
+
+    return pc;
+  }, [cleanupCall, closePeerConnection, pushToast]);
+
+  const handleCallEvent = useCallback(async (event) => {
+    if (!event?.callId) return;
+
+    const currentCall = callStateRef.current;
+
+    switch (event.eventType) {
+      case 'INVITE': {
+        if (currentCall) {
+          sendCallReject(socketRef.current, { callId: event.callId, reason: 'BUSY' });
+          return;
+        }
+
+        setActiveConversationId(event.conversationId);
+
+        const session = {
+          callId: event.callId,
+          conversationId: event.conversationId,
+          callType: event.callType,
+          direction: 'incoming',
+          phase: 'ringing',
+          callerId: event.callerId,
+          callerName: event.callerName || 'Incoming call',
+          callerImage: event.callerImage || '',
+          calleeId: event.calleeId,
+          calleeName: event.calleeName || user?.username || 'You',
+          calleeImage: event.calleeImage || '',
+          peerId: event.callerId,
+          peerName: event.callerName || 'Incoming call',
+          peerImage: event.callerImage || '',
+          muted: false,
+          videoEnabled: event.callType === 'VIDEO'
+        };
+
+        callStateRef.current = session;
+        setCallState(session);
+        setLocalStream(null);
+        setRemoteStream(null);
+        stopMediaStream(localStreamRef.current);
+        localStreamRef.current = null;
+        remoteStreamRef.current = null;
+
+        const pc = createPeerConnection(session);
+        try {
+          await pc.setRemoteDescription({ type: 'offer', sdp: event.sdp });
+        } catch {
+          pushToast('Unable to open incoming call');
+          cleanupCall();
+        }
+        return;
+      }
+
+      case 'ACCEPT': {
+        if (currentCall?.callId !== event.callId) return;
+        const pc = peerConnectionRef.current;
+        if (!pc) return;
+
+        try {
+          await pc.setRemoteDescription({ type: 'answer', sdp: event.sdp });
+          await flushPendingIceCandidates();
+          setCallState((current) => (current ? { ...current, phase: 'active' } : current));
+        } catch {
+          pushToast('Call answer could not be applied');
+          cleanupCall();
+        }
+        return;
+      }
+
+      case 'ICE': {
+        if (currentCall?.callId !== event.callId) return;
+        const pc = peerConnectionRef.current;
+        const candidate = {
+          candidate: event.candidate,
+          sdpMid: event.sdpMid || undefined,
+          sdpMLineIndex: typeof event.sdpMLineIndex === 'number' ? event.sdpMLineIndex : undefined
+        };
+
+        if (pc?.remoteDescription) {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // Ignore stale ICE updates.
+          }
+        } else {
+          pendingIceCandidatesRef.current.push(candidate);
+        }
+        return;
+      }
+
+      case 'REJECT':
+      case 'END':
+      case 'BUSY': {
+        if (currentCall?.callId !== event.callId) return;
+
+        const reason = (() => {
+          switch (event.reason) {
+            case 'USER_BUSY':
+            case 'BUSY':
+              return 'User is busy';
+            case 'USER_UNAVAILABLE':
+              return 'User is unavailable';
+            case 'REJECTED':
+              return 'Call declined';
+            case 'CANCELLED':
+              return 'Call cancelled';
+            case 'MEDIA_DENIED':
+              return 'Media access was denied';
+            case 'ENDED':
+            case 'HUNG_UP':
+              return 'Call ended';
+            default:
+              return event.reason || (event.eventType === 'BUSY' ? 'User is busy' : 'Call ended');
+          }
+        })();
+        cleanupCall();
+        pushToast(reason);
+        return;
+      }
+
+      default:
+        return;
+    }
+  }, [cleanupCall, createPeerConnection, flushPendingIceCandidates, pushToast, user?.username]);
 
   // ── Fetch conversation detail & messages on select ─────────────────────────
 
@@ -537,7 +830,155 @@ export default function ChatPage() {
     setAttachment(new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' }));
   }
 
-  // ── Delete ────────────────────────────────────────────────────────────────
+  async function handleStartCall(callType) {
+    if (!activeConversation || !activePeer) {
+      pushToast('Open a direct conversation first');
+      return;
+    }
+
+    if (activeConversation.type !== 'DIRECT') {
+      pushToast('Calls are only available in direct chats');
+      return;
+    }
+
+    if (callStateRef.current) {
+      pushToast('End the current call first');
+      return;
+    }
+
+    if (!socketRef.current?.connected) {
+      pushToast('Connecting to chat...');
+      return;
+    }
+
+    const callId = createCallId();
+    const session = {
+      callId,
+      conversationId: activeConversation.id,
+      callType,
+      direction: 'outgoing',
+      phase: 'calling',
+      callerId: user.id,
+      callerName: user.username,
+      callerImage: user.profileImage || '',
+      calleeId: activePeer.id,
+      calleeName: activePeer.username,
+      calleeImage: activePeer.profileImage || '',
+      peerId: activePeer.id,
+      peerName: activePeer.username,
+      peerImage: activePeer.profileImage || '',
+      muted: false,
+      videoEnabled: callType === 'VIDEO'
+    };
+
+    callStateRef.current = session;
+    setCallState(session);
+    setLocalStream(null);
+    setRemoteStream(null);
+
+    try {
+      const stream = await getCallMediaStream(callType);
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+
+      const pc = createPeerConnection(session);
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendCallStart(socketRef.current, {
+        callId,
+        conversationId: activeConversation.id,
+        callType,
+        sdp: offer.sdp || ''
+      });
+
+      setCallState((current) => (current ? { ...current, phase: 'ringing' } : current));
+    } catch (error) {
+      cleanupCall();
+      pushToast(error?.message || 'Unable to start call');
+    }
+  }
+
+  async function handleAcceptCall() {
+    const current = callStateRef.current;
+    if (!current || current.direction !== 'incoming') return;
+
+    try {
+      setCallState((state) => (state ? { ...state, phase: 'connecting' } : state));
+
+      const stream = await getCallMediaStream(current.callType);
+      localStreamRef.current = stream;
+      setLocalStream(stream);
+
+      const pc = peerConnectionRef.current || createPeerConnection(current);
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await flushPendingIceCandidates();
+      sendCallAccept(socketRef.current, {
+        callId: current.callId,
+        sdp: answer.sdp || ''
+      });
+
+      setCallState((state) => (state ? { ...state, phase: 'active' } : state));
+    } catch (error) {
+      if (callStateRef.current?.direction === 'incoming') {
+        sendCallReject(socketRef.current, { callId: current.callId, reason: 'MEDIA_DENIED' });
+      }
+      cleanupCall();
+      pushToast(error?.message || 'Unable to answer call');
+    }
+  }
+
+  function handleRejectCall() {
+    const current = callStateRef.current;
+    if (!current) return;
+
+    sendCallReject(socketRef.current, {
+      callId: current.callId,
+      reason: current.direction === 'incoming' ? 'REJECTED' : 'CANCELLED'
+    });
+    cleanupCall();
+  }
+
+  function handleEndCall() {
+    const current = callStateRef.current;
+    if (!current) return;
+
+    sendCallEnd(socketRef.current, {
+      callId: current.callId,
+      reason: 'ENDED'
+    });
+    cleanupCall();
+  }
+
+  function handleToggleMute() {
+    const current = callStateRef.current;
+    const stream = localStreamRef.current;
+    if (!current || !stream) return;
+
+    const nextMuted = !current.muted;
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = !nextMuted;
+    });
+
+    setCallState((state) => (state ? { ...state, muted: nextMuted } : state));
+  }
+
+  function handleToggleVideo() {
+    const current = callStateRef.current;
+    const stream = localStreamRef.current;
+    if (!current || !stream || current.callType !== 'VIDEO') return;
+
+    const nextVideoEnabled = !current.videoEnabled;
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = nextVideoEnabled;
+    });
+
+    setCallState((state) => (state ? { ...state, videoEnabled: nextVideoEnabled } : state));
+  }
 
   async function handleDeleteMessage(messageId) {
     try {
@@ -628,6 +1069,9 @@ export default function ChatPage() {
             online={Boolean(activePeer?.onlineStatus)}
             typingLabel={typingLabel}
             onNewChat={() => setNewChatOpen(true)}
+            onStartAudioCall={() => handleStartCall('AUDIO')}
+            onStartVideoCall={() => handleStartCall('VIDEO')}
+            callDisabled={!activeConversation || !activePeer || Boolean(callState)}
           />
 
           <MessageList
@@ -660,7 +1104,18 @@ export default function ChatPage() {
             onVoiceMessage={handleVoiceMessage}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
-            disabled={!activeConversation}
+            disabled={!activeConversation || Boolean(callState)}
+          />
+
+          <CallOverlay
+            call={callState}
+            localStream={localStream}
+            remoteStream={remoteStream}
+            onAccept={handleAcceptCall}
+            onReject={handleRejectCall}
+            onEnd={handleEndCall}
+            onToggleMute={handleToggleMute}
+            onToggleVideo={handleToggleVideo}
           />
         </main>
       </div>
@@ -677,3 +1132,4 @@ export default function ChatPage() {
     </div>
   );
 }
+

@@ -1,6 +1,14 @@
 import { FiMoreVertical, FiPhone, FiVideo } from 'react-icons/fi';
 
-export default function ChatHeader({ conversation, peer, online = false, onNewChat }) {
+export default function ChatHeader({
+  conversation,
+  peer,
+  online = false,
+  onNewChat,
+  onStartAudioCall,
+  onStartVideoCall,
+  callDisabled = false
+}) {
   const title = conversation?.name || peer?.username || 'Select a chat';
   const subtitle = conversation?.type === 'GROUP'
     ? `${conversation.participants?.length || 0} members`
@@ -34,10 +42,22 @@ export default function ChatHeader({ conversation, peer, online = false, onNewCh
         </div>
 
         <div className="flex items-center gap-2 text-slate-300">
-          <button className="rounded-full p-2 transition hover:bg-white/5 hover:text-white" type="button" aria-label="Voice call">
+          <button
+            className="rounded-full p-2 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            type="button"
+            aria-label="Voice call"
+            onClick={onStartAudioCall}
+            disabled={callDisabled}
+          >
             <FiPhone />
           </button>
-          <button className="rounded-full p-2 transition hover:bg-white/5 hover:text-white" type="button" aria-label="Video call">
+          <button
+            className="rounded-full p-2 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+            type="button"
+            aria-label="Video call"
+            onClick={onStartVideoCall}
+            disabled={callDisabled}
+          >
             <FiVideo />
           </button>
           <button

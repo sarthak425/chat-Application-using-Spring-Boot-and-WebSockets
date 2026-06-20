@@ -6,8 +6,10 @@ import java.security.Principal;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Controller;
+import org.springframework.validation.annotation.Validated;
 
 @Controller
+@Validated
 public class ChatSocketController {
 
     private final MessageService messageService;

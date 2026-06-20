@@ -308,7 +308,7 @@ export default function ChatPage() {
 
     socketRef.current = client;
     return () => client.deactivate();
-  }, [handleCallEvent, pushToast, token, user, subscribeActiveConversation]);
+  }, [pushToast, token, user, subscribeActiveConversation]);
 
   useEffect(() => {
     const cleanup = connectSocket();

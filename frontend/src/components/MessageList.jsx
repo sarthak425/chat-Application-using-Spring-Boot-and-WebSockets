@@ -16,13 +16,20 @@ export default function MessageList({
   onStartNewChat,
   onScroll,
   scrollRef,
-  isLoading = false
+  isLoading = false,
+  isLoadingOlder = false
 }) {
   return (
     <div ref={scrollRef} onScroll={onScroll} className="relative flex h-full flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(37,211,102,0.08),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.03),transparent_24%)]" />
 
       <div className="relative z-10 flex min-h-full flex-1 flex-col justify-end gap-4">
+        {isLoadingOlder ? (
+          <div className="mx-auto rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-400">
+            Loading earlier messages
+          </div>
+        ) : null}
+
         {isLoading ? (
           <div className="space-y-4">
             <LoadingSkeleton />

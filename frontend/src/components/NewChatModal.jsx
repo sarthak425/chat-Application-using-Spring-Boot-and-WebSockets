@@ -51,6 +51,10 @@ export default function NewChatModal({
                 <div className="rounded-3xl border border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
                   Searching contacts...
                 </div>
+              ) : !searchQuery.trim() ? (
+                <div className="rounded-3xl border border-dashed border-white/10 px-4 py-6 text-sm text-slate-400">
+                  Type a name or email to find a person to chat with.
+                </div>
               ) : contacts.length ? (
                 <div className="space-y-2">
                   {contacts.map((contact) => (

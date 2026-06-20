@@ -13,7 +13,8 @@ export default function Sidebar({
   profile,
   onLogout,
   connectionStatus,
-  currentUserId
+  currentUserId,
+  isLoading = false
 }) {
   return (
     <aside className="flex h-full flex-col border-r border-white/5 bg-wa-panel/90 backdrop-blur-xl">
@@ -58,7 +59,11 @@ export default function Sidebar({
         </div>
 
         <div className="space-y-2">
-          {conversations.length ? (
+          {isLoading ? (
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-slate-400">
+              Loading chats...
+            </div>
+          ) : conversations.length ? (
             conversations.map((conversation) => (
               <ConversationItem
                 key={conversation.id}

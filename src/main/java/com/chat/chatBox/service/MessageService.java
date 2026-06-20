@@ -279,10 +279,15 @@ public class MessageService {
         ChatMessage message = requireMessage(messageId);
         ensureParticipant(message.getConversation(), currentUser);
 
-        // Toggle: if already reacted with same emoji, remove; otherwise add/replace
-        int deleted = reactionRepository.deleteByMessageIdAndUserId(messageId, currentUser.getId());
-        if (deleted == 0 || !emoji.equals(getExistingEmoji(messageId, currentUser.getId()))) {
-            // Add new reaction
+        MessageReaction existing = reactionRepository.findByMessageIdAndUserId(messageId, currentUser.getId())
+                .orElse(null);
+
+        if (existing != null && emoji.equals(existing.getEmoji())) {
+            reactionRepository.delete(existing);
+        } else if (existing != null) {
+            existing.setEmoji(emoji);
+            reactionRepository.save(existing);
+        } else {
             MessageReaction reaction = MessageReaction.builder()
                     .message(message)
                     .user(currentUser)
@@ -292,19 +297,13 @@ public class MessageService {
             reactionRepository.save(reaction);
         }
 
-        // Reload to get fresh reactions list
-        ChatMessage refreshed = requireMessage(messageId);
-        ChatDtos.MessageResponse response = chatMapper.toMessageResponse(refreshed, currentUser.getId());
+        // Reload the reaction collection so the broadcast reflects the latest state.
+        message.setReactions(reactionRepository.findByMessageId(messageId));
+        ChatDtos.MessageResponse response = chatMapper.toMessageResponse(message, currentUser.getId());
 
-        broadcastMessageToParticipants(message.getConversation(), refreshed);
+        broadcastMessageToParticipants(message.getConversation(), message);
         messagingTemplate.convertAndSend("/topic/conversations/" + message.getConversation().getId(), response);
         return response;
-    }
-
-    private String getExistingEmoji(Long messageId, Long userId) {
-        return reactionRepository.findByMessageIdAndUserId(messageId, userId)
-                .map(MessageReaction::getEmoji)
-                .orElse(null);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

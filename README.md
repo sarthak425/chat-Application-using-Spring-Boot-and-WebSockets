@@ -1,93 +1,74 @@
-💬 Real-Time Chat Application
+# ChatBox
 
-This project is a simple real-time chat application built with Spring Boot, WebSockets, SockJS, STOMP, and Bootstrap for frontend styling. It allows users to exchange messages instantly in a responsive web interface.
+WhatsApp-inspired direct messaging app built with:
 
-🔧 Technologies Used
-Java 21
+- React + Tailwind CSS
+- Spring Boot + Spring Security
+- JWT authentication
+- STOMP over WebSocket
+- MySQL-ready persistence
 
-Spring Boot 3.5
+## What It Does
 
-Spring WebSocket & STOMP
+- User registration and login
+- One-to-one real-time chat
+- Message history with pagination
+- Typing indicators
+- Read receipts
+- Attachments and voice notes
+- Online/offline presence
+- Dark/light mode
 
-Thymeleaf (template engine)
+## Local Development
 
-SockJS & STOMP.js (JavaScript libraries)
+### Frontend
 
-Bootstrap 5.3 (for UI design)
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-⚙️ Features
-Real-time bi-directional chat functionality using WebSockets.
+### Backend
 
-STOMP protocol support for subscribing and publishing messages.
+Set the database and JWT environment variables if you want to use MySQL locally:
 
-Responsive chat interface with styled message bubbles.
+```bash
+SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/chatbox
+SPRING_DATASOURCE_USERNAME=your_user
+SPRING_DATASOURCE_PASSWORD=your_password
+JWT_SECRET=change-me-in-production-change-me-in-production
+```
 
-Messages display sender’s name and timestamp.
+Then run:
 
-Styled with Bootstrap for a clean, modern UI.
-
-Cross-origin support for mobile testing.
-
-Can be accessed via public tunneling services like Ngrok.
-
-📁 Project Structure
-
-bash
-Copy
-Edit
-
-chatBox/
-
-├── config/                 # WebSocket configuration class
-
-│   └── WebSocke.java
-
-├── controller/             # Spring controller for routing and messaging
-
-│   └── ChatController.java
-
-├── model/                  # Model class for messages
-
-│   └── ChatMessage.java
-
-├── resources/
-
-│   ├── templates/
-
-│   │   └── chat.html       # Frontend chat interface
-
-│   └── application.properties
-
-└── pom.xml                 # Maven configuration
-
-🚀 How to Run
-Clone the repository:
-
-bash
-Copy
-Edit
-git clone https://github.com/your-username/chatBox.git
-cd chatBox
-Run the application:
-
-bash
-Copy
-Edit
+```bash
 ./mvnw spring-boot:run
-Open your browser at:
+```
 
-bash
-Copy
-Edit
-http://localhost:8080/chat
-📱 To access from another device (mobile), make sure both are on the same network or use Ngrok to expose your localhost.
+If you do not set MySQL variables, the app falls back to in-memory H2 for local/test usage.
 
-✅ Future Improvements
-User authentication
+## Production Build
 
-Message persistence with database (e.g., MySQL, MongoDB)
+The included `Dockerfile` builds the React app first, copies the production bundle into Spring Boot, and ships a single deployable container.
 
-Typing indicators and message status
+```bash
+docker build -t chatbox .
+```
 
-Private chat (1:1 messaging)
+## API Notes
+
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `GET /api/conversations`
+- `POST /api/conversations/direct`
+- `GET /api/messages/conversation/{conversationId}/page`
+- `POST /api/messages`
+
+## WebSocket
+
+- Endpoint: `/ws`
+- Application prefix: `/app`
+- Broker topics: `/topic` and `/queue`
 

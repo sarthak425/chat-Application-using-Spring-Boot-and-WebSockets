@@ -3,7 +3,6 @@ import ChatHeader from '../components/ChatHeader';
 import Composer from '../components/Composer';
 import MessageList from '../components/MessageList';
 import NewChatModal from '../components/NewChatModal';
-import GroupCreateModal from '../components/GroupCreateModal';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -12,14 +11,12 @@ import {
   createSocketClient,
   sendSocketMessage,
   sendTyping,
-  sendReadReceipt,
   sendReaction,
   subscribeToConversation,
   subscribeToInbox,
   subscribeToPresence,
   subscribeToTyping,
   subscribeToUserMessages,
-  subscribeToUserPresence,
 } from '../lib/socket';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -109,7 +106,6 @@ export default function ChatPage() {
   const [composerValue, setComposerValue] = useState('');
   const [attachment, setAttachment] = useState(null);
   const [newChatOpen, setNewChatOpen] = useState(false);
-  const [groupCreateOpen, setGroupCreateOpen] = useState(false);
   const [contactQuery, setContactQuery] = useState('');
   const [contacts, setContacts] = useState([]);
   const [contactsLoading, setContactsLoading] = useState(false);
@@ -119,8 +115,7 @@ export default function ChatPage() {
   const [typingByConversation, setTypingByConversation] = useState({});
   const [copiedMessageId, setCopiedMessageId] = useState(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [replyingTo, setReplyingTo] = useState(null);   // MessageResponse | null
-  const [sidebarTab, setSidebarTab] = useState('chats'); // 'chats' | 'groups'
+  const [replyingTo, setReplyingTo] = useState(null); // MessageResponse | null
 
   const socketRef = useRef(null);
   const userMessagesSubRef = useRef(null);
@@ -149,22 +144,19 @@ export default function ChatPage() {
   const activeMessages = messagesByConversation[activeConversationId] || [];
 
   const filteredConversations = useMemo(() => {
-    let list = conversations;
-    if (sidebarTab === 'groups') {
-      list = conversations.filter((c) => c.type === 'GROUP');
-    }
+    const list = conversations.filter((conversation) => conversation.type !== 'GROUP');
     if (!deferredSearchQuery) return list;
     return list.filter((c) => {
       const title = (c.name || '').toLowerCase();
       const preview = (c.lastMessagePreview || '').toLowerCase();
       const participantMatch = c.participants?.some(
         (p) =>
-          p.username.toLowerCase().includes(deferredSearchQuery) ||
-          p.email.toLowerCase().includes(deferredSearchQuery)
+          p.username?.toLowerCase().includes(deferredSearchQuery) ||
+          p.email?.toLowerCase().includes(deferredSearchQuery)
       );
       return title.includes(deferredSearchQuery) || preview.includes(deferredSearchQuery) || participantMatch;
     });
-  }, [conversations, deferredSearchQuery, sidebarTab]);
+  }, [conversations, deferredSearchQuery]);
 
   // ── WebSocket connection ───────────────────────────────────────────────────
 
@@ -315,7 +307,7 @@ export default function ChatPage() {
   const fetchConversation = useCallback(async (conversationId) => {
     if (!conversationId) return;
     try {
-      const res = await http.get(`/api/conversations/${conversationId}/messages/page`);
+      const res = await http.get(`/api/messages/conversation/${conversationId}/page`);
       // Use paginated endpoint
       const { messages, hasMore } = res.data || {};
       setMessagesByConversation((cur) => ({ ...cur, [conversationId]: messages || [] }));
@@ -418,7 +410,11 @@ export default function ChatPage() {
   useEffect(() => {
     let active = true;
     async function loadContacts() {
-      if (!newChatOpen || !contactQuery.trim()) { setContacts([]); return; }
+      if (!newChatOpen || !contactQuery.trim()) {
+        setContacts([]);
+        setContactsLoading(false);
+        return;
+      }
       setContactsLoading(true);
       try {
         const res = await http.get('/api/users/search', { params: { q: contactQuery } });
@@ -595,17 +591,6 @@ export default function ChatPage() {
     }
   }
 
-  async function handleCreateGroup(name, avatarUrl, participantIds) {
-    try {
-      const res = await http.post('/api/conversations/group', { name, avatarUrl, participantIds });
-      setConversations((cur) => upsertConversation(cur, res.data));
-      setActiveConversationId(res.data.id);
-      setGroupCreateOpen(false);
-    } catch (error) {
-      pushToast(error?.response?.data?.message || 'Unable to create group');
-    }
-  }
-
   function onLogout() {
     logout();
     window.location.href = '/login';
@@ -628,14 +613,11 @@ export default function ChatPage() {
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
           onCreateConversation={() => setNewChatOpen(true)}
-          onCreateGroup={() => setGroupCreateOpen(true)}
           onSelectConversation={setActiveConversationId}
           profile={user}
           onLogout={onLogout}
           connectionStatus={connectionStatus}
           currentUserId={user?.id}
-          sidebarTab={sidebarTab}
-          onSidebarTabChange={setSidebarTab}
           isLoading={isLoading}
         />
 
@@ -691,12 +673,6 @@ export default function ChatPage() {
         onSelectContact={openConversationWithContact}
         onClose={() => setNewChatOpen(false)}
         loading={contactsLoading}
-      />
-
-      <GroupCreateModal
-        open={groupCreateOpen}
-        onClose={() => setGroupCreateOpen(false)}
-        onCreateGroup={handleCreateGroup}
       />
     </div>
   );

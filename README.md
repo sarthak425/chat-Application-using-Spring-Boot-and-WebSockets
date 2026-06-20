@@ -48,6 +48,19 @@ Then run:
 
 If you do not set MySQL variables, the app falls back to in-memory H2 for local/test usage.
 
+## Production Deploy
+
+Render runs the app with `SPRING_PROFILES_ACTIVE=prod`.
+
+Set these environment variables in your production service:
+
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `JWT_SECRET`
+
+The `prod` profile does not enable H2, so the app will fail fast if the MySQL settings are missing.
+
 ## Production Build
 
 The included `Dockerfile` builds the React app first, copies the production bundle into Spring Boot, and ships a single deployable container.
@@ -71,4 +84,3 @@ docker build -t chatbox .
 - Endpoint: `/ws`
 - Application prefix: `/app`
 - Broker topics: `/topic` and `/queue`
-

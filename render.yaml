@@ -4,3 +4,6 @@ services:
     env: docker
     plan: free
     dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod

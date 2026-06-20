@@ -252,6 +252,8 @@ export default function ChatPage() {
       client,
       conversationId,
       (incomingMessage) => {
+        incomingMessage.mine = incomingMessage.senderId === user?.id;
+
         setMessagesByConversation((current) => {
           const nextMessages = mergeMessage(current[conversationId] || [], incomingMessage);
           return { ...current, [conversationId]: nextMessages };

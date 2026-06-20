@@ -48,6 +48,14 @@ public class SecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(restAuthenticationEntryPoint))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
+                                "/",
+                                "/login",
+                                "/register",
+                                "/chat",
+                                "/index.html",
+                                "/assets/**",
+                                "/favicon.ico",
+                                "/vite.svg",
                                 "/api/auth/**",
                                 "/api/public/**",
                                 "/api/files/**",

@@ -36,9 +36,10 @@ CREATE TABLE IF NOT EXISTS conversation_participants (
     archived BIT(1) NOT NULL DEFAULT 0,
     pinned BIT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
+    UNIQUE KEY uk_participant (conversation_id, user_id),
     KEY idx_participants_conversation (conversation_id),
     KEY idx_participants_user (user_id),
-    CONSTRAINT fk_participants_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+    CONSTRAINT fk_participants_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     CONSTRAINT fk_participants_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS messages (
     conversation_id BIGINT NOT NULL,
     sender_id BIGINT NOT NULL,
     receiver_id BIGINT NULL,
+    reply_to_id BIGINT NULL,
     content TEXT NOT NULL,
     message_type VARCHAR(20) NOT NULL,
     file_url VARCHAR(512),
@@ -55,12 +57,27 @@ CREATE TABLE IF NOT EXISTS messages (
     edited_at TIMESTAMP NULL,
     deleted_at TIMESTAMP NULL,
     read_at TIMESTAMP NULL,
+    pinned_at TIMESTAMP NULL,
     deleted BIT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     KEY idx_messages_conversation (conversation_id),
     KEY idx_messages_sender (sender_id),
     KEY idx_messages_receiver (receiver_id),
-    CONSTRAINT fk_messages_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+    KEY idx_messages_conv_timestamp (conversation_id, timestamp DESC),
+    CONSTRAINT fk_messages_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
     CONSTRAINT fk_messages_sender FOREIGN KEY (sender_id) REFERENCES users(id),
-    CONSTRAINT fk_messages_receiver FOREIGN KEY (receiver_id) REFERENCES users(id)
+    CONSTRAINT fk_messages_receiver FOREIGN KEY (receiver_id) REFERENCES users(id),
+    CONSTRAINT fk_messages_reply_to FOREIGN KEY (reply_to_id) REFERENCES messages(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS message_reactions (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    message_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    emoji VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_reaction (message_id, user_id),
+    CONSTRAINT fk_reaction_message FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    CONSTRAINT fk_reaction_user FOREIGN KEY (user_id) REFERENCES users(id)
 );

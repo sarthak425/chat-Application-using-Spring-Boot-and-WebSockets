@@ -6,10 +6,12 @@ import com.chat.chatBox.entity.AppUser;
 import com.chat.chatBox.entity.ChatConversation;
 import com.chat.chatBox.entity.ChatMessage;
 import com.chat.chatBox.entity.ConversationParticipant;
+import com.chat.chatBox.entity.MessageReaction;
 import com.chat.chatBox.entity.enums.ConversationType;
-import java.time.Instant;
-import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -38,6 +40,49 @@ public class ChatMapper {
                 user.getLastSeen());
     }
 
+    /**
+     * Build a lightweight ReplyPreview from the parent message.
+     * Returns null if replyTo is null.
+     */
+    public ChatDtos.ReplyPreview toReplyPreview(ChatMessage message) {
+        if (message == null) {
+            return null;
+        }
+        String content = message.isDeleted()
+                ? "This message was deleted"
+                : (message.getContent() == null ? "" : message.getContent());
+        return new ChatDtos.ReplyPreview(
+                message.getId(),
+                message.getSender().getId(),
+                message.getSender().getUsername(),
+                content,
+                message.getMessageType());
+    }
+
+    /**
+     * Group reactions by emoji, aggregating usernames and count.
+     */
+    public List<ChatDtos.ReactionSummary> toReactionSummaries(List<MessageReaction> reactions, Long currentUserId) {
+        if (reactions == null || reactions.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, List<MessageReaction>> byEmoji = new LinkedHashMap<>();
+        for (MessageReaction reaction : reactions) {
+            byEmoji.computeIfAbsent(reaction.getEmoji(), k -> new ArrayList<>()).add(reaction);
+        }
+
+        return byEmoji.entrySet().stream().map(entry -> {
+            String emoji = entry.getKey();
+            List<MessageReaction> group = entry.getValue();
+            List<String> usernames = group.stream()
+                    .map(r -> r.getUser().getUsername())
+                    .collect(Collectors.toList());
+            boolean mine = group.stream().anyMatch(r -> Objects.equals(r.getUser().getId(), currentUserId));
+            return new ChatDtos.ReactionSummary(emoji, group.size(), usernames, mine);
+        }).collect(Collectors.toList());
+    }
+
     public ChatDtos.MessageResponse toMessageResponse(ChatMessage message, Long currentUserId) {
         return new ChatDtos.MessageResponse(
                 message.getId(),
@@ -53,7 +98,11 @@ public class ChatMapper {
                 message.getTimestamp(),
                 message.getEditedAt(),
                 message.getReadAt(),
-                Objects.equals(message.getSender().getId(), currentUserId));
+                message.getPinnedAt(),
+                Objects.equals(message.getSender().getId(), currentUserId),
+                message.isDeleted(),
+                toReplyPreview(message.getReplyTo()),
+                toReactionSummaries(message.getReactions(), currentUserId));
     }
 
     public ChatDtos.ConversationSummaryResponse toConversationSummary(
@@ -82,7 +131,7 @@ public class ChatMapper {
                 conversation.getType(),
                 name,
                 avatar,
-                onlinePeer != null || (conversation.getType() == ConversationType.DIRECT && currentUser.isOnlineStatus()),
+                onlinePeer != null,
                 lastMessagePreview,
                 conversation.getLastMessageAt(),
                 unreadCount,
@@ -150,10 +199,10 @@ public class ChatMapper {
         }
 
         return switch (message.getMessageType()) {
-            case IMAGE -> "Photo";
-            case FILE -> "File";
-            case AUDIO -> "Voice note";
-            case VIDEO -> "Video";
+            case IMAGE -> "📷 Photo";
+            case FILE -> "📎 File";
+            case AUDIO -> "🎤 Voice note";
+            case VIDEO -> "🎬 Video";
             case SYSTEM -> message.getContent();
             default -> message.getContent();
         };

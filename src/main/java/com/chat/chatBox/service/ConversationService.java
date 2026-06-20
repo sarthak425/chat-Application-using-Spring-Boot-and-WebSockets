@@ -46,7 +46,9 @@ public class ConversationService {
         AppUser currentUser = currentUserService.requireCurrentUser();
         return conversationRepository.findAllForUser(currentUser.getId()).stream()
                 .map(conversation -> {
-                    String preview = chatMessageRepository.findTopByConversationIdOrderByTimestampDesc(conversation.getId())
+                    // findTopByConversationIdOrderByTimestampDesc uses EntityGraph — avoids N+1
+                    String preview = chatMessageRepository
+                            .findTopByConversationIdOrderByTimestampDesc(conversation.getId())
                             .map(chatMapper::previewFromConversation)
                             .orElse("No messages yet");
                     return chatMapper.toConversationSummary(
@@ -83,12 +85,13 @@ public class ConversationService {
     }
 
     @Transactional
-    public ChatConversation createGroupConversation(String name, List<Long> participantIds) {
+    public ChatConversation createGroupConversation(String name, String avatarUrl, List<Long> participantIds) {
         AppUser currentUser = currentUserService.requireCurrentUser();
         ChatConversation conversation = ChatConversation.builder()
                 .conversationKey("group:" + System.currentTimeMillis() + ":" + currentUser.getId())
                 .type(ConversationType.GROUP)
                 .name(name == null || name.isBlank() ? "Group chat" : name.trim())
+                .avatarUrl(avatarUrl)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .lastMessageAt(Instant.now())
@@ -101,11 +104,38 @@ public class ConversationService {
                 if (participantId == null || participantId.equals(currentUser.getId())) {
                     continue;
                 }
-                appUserRepository.findById(participantId).ifPresent(user -> participants.add(newParticipant(conversation, user)));
+                appUserRepository.findById(participantId)
+                        .ifPresent(user -> participants.add(newParticipant(conversation, user)));
             }
         }
         conversation.setParticipants(participants);
         return conversationRepository.save(conversation);
+    }
+
+    @Transactional
+    public ChatDtos.ConversationSummaryResponse updateGroup(Long conversationId, String name, String avatarUrl) {
+        AppUser currentUser = currentUserService.requireCurrentUser();
+        ChatConversation conversation = requireConversation(conversationId);
+        ensureParticipant(conversation, currentUser);
+
+        if (conversation.getType() != ConversationType.GROUP) {
+            throw new IllegalArgumentException("Only group conversations can be updated");
+        }
+
+        if (name != null && !name.isBlank()) {
+            conversation.setName(name.trim());
+        }
+        if (avatarUrl != null) {
+            conversation.setAvatarUrl(avatarUrl);
+        }
+        conversation.setUpdatedAt(Instant.now());
+        ChatConversation saved = conversationRepository.save(conversation);
+
+        String preview = chatMessageRepository
+                .findTopByConversationIdOrderByTimestampDesc(conversationId)
+                .map(chatMapper::previewFromConversation)
+                .orElse("No messages yet");
+        return chatMapper.toConversationSummary(saved, currentUser, unreadCount(saved, currentUser), preview);
     }
 
     @Transactional
@@ -121,14 +151,18 @@ public class ConversationService {
                     participantRepository.save(participant);
                 });
 
-        chatMessageRepository.updateConversationStatuses(conversationId, currentUser.getId(), com.chat.chatBox.entity.enums.MessageStatus.READ, now);
+        chatMessageRepository.updateConversationStatuses(
+                conversationId, currentUser.getId(), com.chat.chatBox.entity.enums.MessageStatus.READ, now);
     }
 
     @Transactional(readOnly = true)
     public long unreadCountForUser(ChatConversation conversation, AppUser user) {
-        ConversationParticipant participant = participantRepository.findByConversationIdAndUserId(conversation.getId(), user.getId())
+        ConversationParticipant participant = participantRepository
+                .findByConversationIdAndUserId(conversation.getId(), user.getId())
                 .orElse(null);
-        Instant since = participant != null && participant.getLastReadAt() != null ? participant.getLastReadAt() : Instant.EPOCH;
+        Instant since = participant != null && participant.getLastReadAt() != null
+                ? participant.getLastReadAt()
+                : Instant.EPOCH;
         return chatMessageRepository.countUnreadMessages(conversation.getId(), user.getId(), since);
     }
 

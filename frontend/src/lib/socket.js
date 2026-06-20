@@ -25,6 +25,23 @@ export function createSocketClient(token, { onConnect, onDisconnect, onError } =
   return client;
 }
 
+/**
+ * ✅ THE FIX: Subscribe to a user's personal message feed.
+ * This receives ALL messages across ALL conversations for this user,
+ * so User B receives messages even when they don't have the chat open.
+ */
+export function subscribeToUserMessages(client, userId, onMessage) {
+  return client.subscribe(`/topic/users/${userId}/messages`, (frame) => {
+    onMessage(JSON.parse(frame.body));
+  });
+}
+
+export function subscribeToUserPresence(client, userId, onPresence) {
+  return client.subscribe(`/topic/users/${userId}/presence`, (frame) => {
+    onPresence(JSON.parse(frame.body));
+  });
+}
+
 export function subscribeToConversation(client, conversationId, onMessage) {
   return client.subscribe(`/topic/conversations/${conversationId}`, (frame) => {
     onMessage(JSON.parse(frame.body));
@@ -43,6 +60,7 @@ export function subscribeToInbox(client, userId, onInbox) {
   });
 }
 
+/** @deprecated Use subscribeToUserPresence for per-user presence instead. */
 export function subscribeToPresence(client, onPresence) {
   return client.subscribe('/topic/presence', (frame) => {
     onPresence(JSON.parse(frame.body));
@@ -66,6 +84,20 @@ export function sendTyping(client, payload) {
 export function sendReadReceipt(client, payload) {
   client?.publish({
     destination: '/app/chat.read',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendReaction(client, payload) {
+  client?.publish({
+    destination: '/app/chat.react',
+    body: JSON.stringify(payload)
+  });
+}
+
+export function sendPin(client, payload) {
+  client?.publish({
+    destination: '/app/chat.pin',
     body: JSON.stringify(payload)
   });
 }

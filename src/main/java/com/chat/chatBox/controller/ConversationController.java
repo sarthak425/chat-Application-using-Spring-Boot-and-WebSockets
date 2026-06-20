@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,15 +32,18 @@ public class ConversationController {
     }
 
     @PostMapping("/direct")
-    public ResponseEntity<ChatDtos.ConversationSummaryResponse> direct(@Valid @RequestBody ChatDtos.CreateConversationRequest request) {
+    public ResponseEntity<ChatDtos.ConversationSummaryResponse> direct(
+            @Valid @RequestBody ChatDtos.CreateConversationRequest request) {
         var conversation = conversationService.getOrCreateDirectConversation(request.participantId());
         return ResponseEntity.ok(conversationService.getConversation(conversation.getId()).conversation());
     }
 
     @PostMapping("/group")
-    public ResponseEntity<Void> createGroup(@RequestBody List<Long> participantIds) {
-        conversationService.createGroupConversation("Group chat", participantIds);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<ChatDtos.ConversationSummaryResponse> createGroup(
+            @RequestBody @Valid ChatDtos.CreateGroupRequest request) {
+        var conversation = conversationService.createGroupConversation(
+                request.name(), request.avatarUrl(), request.participantIds());
+        return ResponseEntity.ok(conversationService.getConversation(conversation.getId()).conversation());
     }
 
     @GetMapping("/{id}")
@@ -51,5 +55,12 @@ public class ConversationController {
     public ResponseEntity<Void> read(@PathVariable Long id) {
         messageService.markRead(id);
         return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<ChatDtos.ConversationSummaryResponse> update(
+            @PathVariable Long id,
+            @RequestBody ChatDtos.CreateGroupRequest request) {
+        return ResponseEntity.ok(conversationService.updateGroup(id, request.name(), request.avatarUrl()));
     }
 }

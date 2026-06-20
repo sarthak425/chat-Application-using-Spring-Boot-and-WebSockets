@@ -12,9 +12,18 @@ public final class ChatDtos {
     private ChatDtos() {
     }
 
+    // ── Requests ────────────────────────────────────────────────────────────
+
     public record CreateConversationRequest(
             @NotNull Long participantId,
             String name
+    ) {
+    }
+
+    public record CreateGroupRequest(
+            @NotBlank String name,
+            String avatarUrl,
+            List<Long> participantIds
     ) {
     }
 
@@ -23,7 +32,8 @@ public final class ChatDtos {
             Long receiverId,
             String content,
             MessageType messageType,
-            String fileUrl
+            String fileUrl,
+            Long replyToId
     ) {
     }
 
@@ -35,6 +45,44 @@ public final class ChatDtos {
 
     public record ReadReceiptRequest(
             @NotNull Long conversationId
+    ) {
+    }
+
+    public record ReactMessageRequest(
+            @NotNull Long messageId,
+            @NotNull String emoji
+    ) {
+    }
+
+    public record PinMessageRequest(
+            @NotNull Long messageId,
+            boolean pin
+    ) {
+    }
+
+    public record EditMessageRequest(
+            @NotBlank String content
+    ) {
+    }
+
+    // ── Responses ───────────────────────────────────────────────────────────
+
+    /** Grouped emoji reaction summary: emoji → list of usernames who reacted. */
+    public record ReactionSummary(
+            String emoji,
+            long count,
+            List<String> usernames,
+            boolean mine
+    ) {
+    }
+
+    /** Lightweight reply preview embedded inside MessageResponse. */
+    public record ReplyPreview(
+            Long id,
+            Long senderId,
+            String senderName,
+            String content,
+            MessageType messageType
     ) {
     }
 
@@ -52,7 +100,18 @@ public final class ChatDtos {
             Instant timestamp,
             Instant editedAt,
             Instant readAt,
-            boolean mine
+            Instant pinnedAt,
+            boolean mine,
+            boolean deleted,
+            ReplyPreview replyTo,
+            List<ReactionSummary> reactions
+    ) {
+    }
+
+    public record MessagePageResponse(
+            List<MessageResponse> messages,
+            boolean hasMore,
+            Long oldestId
     ) {
     }
 

@@ -1,86 +1,163 @@
-# ChatBox
+# Chat Application using Spring Boot and WebSockets
 
-WhatsApp-inspired direct messaging app built with:
+A real-time chat application built with **Spring Boot**, **WebSocket**, **STOMP**, **SockJS**, and **Bootstrap** that enables instant messaging between users without page refresh.
 
-- React + Tailwind CSS
-- Spring Boot + Spring Security
-- JWT authentication
-- STOMP over WebSocket
-- MySQL-ready persistence
+## 🚀 Features
 
-## What It Does
+* Real-time messaging using WebSockets
+* STOMP messaging protocol support
+* SockJS fallback for browser compatibility
+* User join/leave notifications
+* Responsive chat interface
+* Live message broadcasting
+* Lightweight and easy to deploy
+* Spring Boot backend with embedded server
 
-- User registration and login
-- One-to-one real-time chat
-- Message history with pagination
-- Typing indicators
-- Read receipts
-- Attachments and voice notes
-- Online/offline presence
-- Dark/light mode
-
-## Local Development
-
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## 🛠️ Tech Stack
 
 ### Backend
 
-Set the database and JWT environment variables if you want to use MySQL locally:
+* Java 21
+* Spring Boot
+* Spring WebSocket
+* STOMP
+* SockJS
+* Maven
+* Lombok
 
-```bash
-SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/chatbox
-SPRING_DATASOURCE_USERNAME=your_user
-SPRING_DATASOURCE_PASSWORD=your_password
-JWT_SECRET=change-me-in-production-change-me-in-production
+### Frontend
+
+* HTML5
+* CSS3
+* JavaScript
+* Bootstrap 5
+
+## 📂 Project Structure
+
+```text
+src
+├── main
+│   ├── java
+│   │   └── com.chatapp
+│   │       ├── controller
+│   │       ├── model
+│   │       ├── config
+│   │       └── ChatApplication.java
+│   └── resources
+│       ├── static
+│       ├── templates
+│       └── application.properties
 ```
 
-Then run:
+## ⚙️ How It Works
 
-```bash
-./mvnw spring-boot:run
+1. Users enter their username and join the chat room.
+2. A WebSocket connection is established between client and server.
+3. Messages are sent using STOMP messaging.
+4. Spring Boot broadcasts messages to all connected clients.
+5. Users receive messages instantly without refreshing the page.
+
+## 🔄 WebSocket Flow
+
+```text
+Client
+   │
+   ▼
+SockJS Connection
+   │
+   ▼
+STOMP Messaging
+   │
+   ▼
+Spring Boot WebSocket Server
+   │
+   ▼
+Broadcast Message
+   │
+   ▼
+Connected Users
 ```
 
-If you do not set MySQL variables, the app falls back to in-memory H2 for local/test usage.
+## 📦 Installation
 
-## Production Deploy
-
-Render runs the app with `SPRING_PROFILES_ACTIVE=prod`.
-
-Set these environment variables in your production service:
-
-- `SPRING_DATASOURCE_URL`
-- `SPRING_DATASOURCE_USERNAME`
-- `SPRING_DATASOURCE_PASSWORD`
-- `JWT_SECRET`
-
-The `prod` profile does not enable H2, so the app will fail fast if the MySQL settings are missing.
-
-## Production Build
-
-The included `Dockerfile` builds the React app first, copies the production bundle into Spring Boot, and ships a single deployable container.
+### Clone Repository
 
 ```bash
-docker build -t chatbox .
+git clone https://github.com/sarthak425/chat-Application-using-Spring-Boot-and-WebSockets.git
 ```
 
-## API Notes
+### Navigate to Project
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/auth/me`
-- `GET /api/conversations`
-- `POST /api/conversations/direct`
-- `GET /api/messages/conversation/{conversationId}/page`
-- `POST /api/messages`
+```bash
+cd chat-Application-using-Spring-Boot-and-WebSockets
+```
 
-## WebSocket
+### Build Project
 
-- Endpoint: `/ws`
-- Application prefix: `/app`
-- Broker topics: `/topic` and `/queue`
+```bash
+mvn clean install
+```
+
+### Run Application
+
+```bash
+mvn spring-boot:run
+```
+
+Or run:
+
+```bash
+ChatApplication.java
+```
+
+## 🌐 Access Application
+
+Open browser:
+
+```text
+http://localhost:8081
+```
+
+(Use your configured server port if different.)
+
+## 📸 Application Features
+
+* Join Chat Room
+* Send Messages
+* Receive Messages Instantly
+* User Notifications
+* Real-Time Communication
+
+## 🎯 Learning Objectives
+
+This project demonstrates:
+
+* WebSocket Communication
+* Real-Time Application Development
+* Spring Boot WebSocket Configuration
+* STOMP Protocol Integration
+* Client-Server Messaging Architecture
+* Event-Driven Communication
+
+## 🔮 Future Enhancements
+
+* Private Messaging
+* User Authentication (JWT)
+* Online/Offline Status
+* Chat History Storage
+* File Sharing
+* Emoji Support
+* Voice Messages
+* Group Chats
+* Video Calling
+* WhatsApp-style UI
+
+## 👨‍💻 Author
+
+**Sarthak Khatpe**
+
+GitHub: https://github.com/sarthak425
+
+---
+
+⭐ If you found this project useful, consider giving it a star on GitHub.
